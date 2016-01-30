@@ -1,0 +1,7 @@
+{
+	"listenPort":"9090",
+	"rootRepoPath":"/opt/myrepo",
+	"supportedArch":["all","i386","amd64"],
+	"scanpackagePath": "/usr/bin/dpkg-scanpackages",
+	"gzipPath": "/bin/gzip"
+}
