@@ -24,7 +24,17 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 # TODO:
 
 - [ ] Remove dpkg-scanpackages from the equation
-- [ ] Remove gzip from the equation
+- [x] Remove gzip from the equation
 - [ ] Actually handle multi-arch repos
 - [ ] Support SSL
 
+# Usage:
+
+Install using `go get`. Fill out the conf.json file with the values you want, it should be pretty self-explanatory, then fire it up!
+
+Once it is running POST a file to the `/upload` endpoint:
+`curl -XPOST 'http://localhost:9090/upload' -F "file=@myapp.deb"`
+
+#License:
+
+[MIT](LICENSE.txt) so go crazy. Would appreciate PRs for anything cool you add though :)
