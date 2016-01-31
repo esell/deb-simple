@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -20,7 +21,6 @@ type Conf struct {
 	RootRepoPath    string   `json:"rootRepoPath"`
 	SupportArch     []string `json:"supportedArch"`
 	ScanpackagePath string   `json:"scanpackagePath"`
-	GzipPath        string   `json:"gzipPath"`
 }
 
 var sem = make(semaphore, 1)
@@ -41,6 +41,25 @@ func main() {
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(config.RootRepoPath))))
 	http.HandleFunc("/upload", uploadHandler)
 	http.ListenAndServe(":"+config.ListenPort, nil)
+}
+func createPackagesTar(arch string) bool {
+	cmd1 := exec.Command(config.ScanpackagePath, config.RootRepoPath+"/dists/stable/main/binary-"+arch, "/dev/null")
+	outfile, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/Packages.gz")
+	if err != nil {
+		log.Println("error creating packages.gz file")
+		return false
+	}
+	defer outfile.Close()
+	gzOut := gzip.NewWriter(outfile)
+	defer gzOut.Close()
+	cmd1.Stdout = gzOut
+	err = cmd1.Run()
+	if err != nil {
+		log.Println("unable run scanpackages ", err)
+		return false
+	}
+	gzOut.Flush()
+	return true
 }
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,31 +84,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("grabbing lock...")
 		sem.Lock()
 		log.Println("got lock, updating package list...")
-		// do package update
-		// dpkg-scanpackages binary /dev/null | gzip -9c > binary/Packages.gz
-		cmd1 := exec.Command(config.ScanpackagePath, config.RootRepoPath+"/dists/stable/main/binary-amd64", "/dev/null")
-		cmd2 := exec.Command(config.GzipPath, "-9c")
-		outfile, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-amd64/Packages.gz")
-		if err != nil {
-			log.Println("error creating packages.gz file")
-		}
-		defer outfile.Close()
-		cmd2.Stdout = outfile
-		cmd2.Stdin, err = cmd1.StdoutPipe()
-		if err != nil {
-			log.Println("unable to set cmd2.Stdin ", err)
-		}
-		err = cmd2.Start()
-		if err != nil {
-			log.Println("unable start cmd2 ", err)
-		}
-		err = cmd1.Run()
-		if err != nil {
-			log.Println("unable run scanpackages ", err)
-		}
-		err = cmd2.Wait()
-		if err != nil {
-			log.Println("unable wait cmd2 ", err)
+		if !createPackagesTar("amd64") {
+			log.Println("unable to create Packages.gz")
 		}
 		sem.Unlock()
 		log.Println("lock returned")

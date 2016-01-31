@@ -1,0 +1,6 @@
+{
+	"listenPort":"9090",
+	"rootRepoPath":"/Users/eujon/go/src/github.com/esell/deb-simple/repo",
+	"supportedArch":["all","i386","amd64"],
+	"scanpackagePath": "/usr/local/bin/dpkg-scanpackages"
+}
