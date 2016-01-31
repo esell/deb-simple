@@ -15,6 +15,14 @@ import (
 
 type semaphore chan int
 
+type Conf struct {
+	ListenPort      string   `json:"listenPort"`
+	RootRepoPath    string   `json:"rootRepoPath"`
+	SupportArch     []string `json:"supportedArch"`
+	ScanpackagePath string   `json:"scanpackagePath"`
+	GzipPath        string   `json:"gzipPath"`
+}
+
 var sem = make(semaphore, 1)
 var configFile = flag.String("c", "conf.json", "config file location")
 var config = &Conf{}
