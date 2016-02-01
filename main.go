@@ -168,7 +168,7 @@ func createPackagesTar(arch string) bool {
 		if strings.HasSuffix(debFile.Name(), "deb") {
 			tempCtlData := inspectPackage(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
 			packBuf.WriteString(tempCtlData)
-			packBuf.WriteString("Filename: " + config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name() + "\n")
+			packBuf.WriteString("Filename: " + "dists/stable/main/binary-" + arch + "/" + debFile.Name() + "\n")
 			packBuf.WriteString("Size: " + strconv.FormatInt(debFile.Size(), 10) + "\n")
 			f, _ := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
 			md5hash := md5.New()
