@@ -55,10 +55,10 @@ func main() {
 
 func createDirs() bool {
 	for _, archDir := range config.SupportArch {
-		if _, err := os.Stat(config.RootRepoPath + "/dists/stable/main/" + archDir); err != nil {
+		if _, err := os.Stat(config.RootRepoPath + "/dists/stable/main/binary-" + archDir); err != nil {
 			if os.IsNotExist(err) {
 				log.Printf("Directory for %s does not exist, creating", archDir)
-				dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/"+archDir, 0755)
+				dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-"+archDir, 0755)
 				if dirErr != nil {
 					log.Printf("error creating directory for %s: %s\n", archDir, dirErr)
 					return false
@@ -196,12 +196,17 @@ func createPackagesTar(arch string) bool {
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
+		archType := r.FormValue("arch")
+		if archType == "" {
+			archType = "all"
+		}
+		log.Println("archType is: ", archType)
 		file, header, err := r.FormFile("file")
 		if err != nil {
 			log.Println("error parsing file: ", err)
 		}
 		log.Println("filename is: ", header.Filename)
-		out, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-amd64/" + header.Filename)
+		out, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archType + "/" + header.Filename)
 		if err != nil {
 			log.Println("error creating file: ", err)
 		}
@@ -216,7 +221,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("grabbing lock...")
 		sem.Lock()
 		log.Println("got lock, updating package list...")
-		if !createPackagesTar("amd64") {
+		if !createPackagesTar(archType) {
 			log.Println("unable to create Packages.gz")
 		}
 		sem.Unlock()
