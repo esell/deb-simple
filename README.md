@@ -23,10 +23,11 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 
 # TODO:
 
-- [ ] Remove dpkg-scanpackages from the equation
+- [x] Remove dpkg-scanpackages from the equation
 - [x] Remove gzip from the equation
 - [ ] Actually handle multi-arch repos
 - [ ] Support SSL
+- [ ] Add delete ability
 
 # Usage:
 

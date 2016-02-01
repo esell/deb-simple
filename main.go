@@ -1,8 +1,12 @@
 package main
 
 import (
+	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -11,16 +15,18 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
+	"strconv"
+	"strings"
+
+	"github.com/blakesmith/ar"
 )
 
 type semaphore chan int
 
 type Conf struct {
-	ListenPort      string   `json:"listenPort"`
-	RootRepoPath    string   `json:"rootRepoPath"`
-	SupportArch     []string `json:"supportedArch"`
-	ScanpackagePath string   `json:"scanpackagePath"`
+	ListenPort   string   `json:"listenPort"`
+	RootRepoPath string   `json:"rootRepoPath"`
+	SupportArch  []string `json:"supportedArch"`
 }
 
 var sem = make(semaphore, 1)
@@ -42,8 +48,116 @@ func main() {
 	http.HandleFunc("/upload", uploadHandler)
 	http.ListenAndServe(":"+config.ListenPort, nil)
 }
+
+func inspectPackage(filename string) string {
+	f, err := os.Open(filename)
+	if err != nil {
+		log.Printf("error opening package file %s: %s\n", filename, err)
+		return ""
+	}
+	defer f.Close()
+
+	arReader := ar.NewReader(f)
+	var controlBuf bytes.Buffer
+
+	for {
+		header, err := arReader.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Println("error in inspectPackage loop: ", err)
+			return ""
+		}
+
+		if header.Name == "control.tar.gz" {
+			io.Copy(&controlBuf, arReader)
+			return inspectPackageControl(controlBuf)
+
+		}
+
+	}
+	return ""
+}
+
+func inspectPackageControl(filename bytes.Buffer) string {
+	gzf, err := gzip.NewReader(bytes.NewReader(filename.Bytes()))
+	if err != nil {
+		log.Println("error creating gzip reader: ", err)
+		return ""
+	}
+
+	tarReader := tar.NewReader(gzf)
+	var controlBuf bytes.Buffer
+	for {
+		header, err := tarReader.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Println("error in inspectPackage loop: ", err)
+			return ""
+		}
+
+		name := header.Name
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			continue
+		case tar.TypeReg:
+			if name == "./control" {
+				io.Copy(&controlBuf, tarReader)
+				log.Printf("control file: %s\n", controlBuf.String())
+				return controlBuf.String()
+			}
+		default:
+			log.Printf("%s : %c %s %s\n",
+				"Yikes! Unable to figure out type",
+				header.Typeflag,
+				"in file",
+				name,
+			)
+		}
+	}
+	return ""
+}
+
 func createPackagesTar(arch string) bool {
-	cmd1 := exec.Command(config.ScanpackagePath, config.RootRepoPath+"/dists/stable/main/binary-"+arch, "/dev/null")
+	var packBuf bytes.Buffer
+	// loop through each directory
+	// run inspectPackage
+	dirList, err := ioutil.ReadDir(config.RootRepoPath + "/dists/stable/main/binary-" + arch)
+	if err != nil {
+		log.Printf("error scanning %s: %s\n", config.RootRepoPath+"/dists/stable/main/binary-"+arch, err)
+		return false
+	}
+	for _, debFile := range dirList {
+		if strings.HasSuffix(debFile.Name(), "deb") {
+			tempCtlData := inspectPackage(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
+			packBuf.WriteString(tempCtlData)
+			packBuf.WriteString("Filename: " + config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name() + "\n")
+			packBuf.WriteString("Size: " + strconv.FormatInt(debFile.Size(), 10) + "\n")
+			f, _ := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
+			md5hash := md5.New()
+			io.WriteString(md5hash, string(f[:]))
+			md5sum := hex.EncodeToString(md5hash.Sum(nil))
+			packBuf.WriteString("MD5sum: " + md5sum + "\n")
+			sha1hash := sha1.New()
+			io.WriteString(sha1hash, string(f[:]))
+			sha1sum := hex.EncodeToString(sha1hash.Sum(nil))
+			packBuf.WriteString("SHA1: " + sha1sum + "\n")
+			sha256hash := sha256.New()
+			io.WriteString(sha256hash, string(f[:]))
+			sha256sum := hex.EncodeToString(sha256hash.Sum(nil))
+			packBuf.WriteString("SHA256: " + sha256sum + "\n")
+			packBuf.WriteString("\n\n")
+		}
+	}
+
 	outfile, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/Packages.gz")
 	if err != nil {
 		log.Println("error creating packages.gz file")
@@ -52,12 +166,7 @@ func createPackagesTar(arch string) bool {
 	defer outfile.Close()
 	gzOut := gzip.NewWriter(outfile)
 	defer gzOut.Close()
-	cmd1.Stdout = gzOut
-	err = cmd1.Run()
-	if err != nil {
-		log.Println("unable run scanpackages ", err)
-		return false
-	}
+	gzOut.Write(packBuf.Bytes())
 	gzOut.Flush()
 	return true
 }
