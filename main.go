@@ -44,9 +44,32 @@ func main() {
 		log.Panic("unable to marshal config file, exiting...")
 	}
 
+	if !createDirs() {
+		log.Println("error creating directory structure, exiting")
+		os.Exit(1)
+	}
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(config.RootRepoPath))))
 	http.HandleFunc("/upload", uploadHandler)
 	http.ListenAndServe(":"+config.ListenPort, nil)
+}
+
+func createDirs() bool {
+	for _, archDir := range config.SupportArch {
+		if _, err := os.Stat(config.RootRepoPath + "/dists/stable/main/" + archDir); err != nil {
+			if os.IsNotExist(err) {
+				log.Printf("Directory for %s does not exist, creating", archDir)
+				dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/"+archDir, 0755)
+				if dirErr != nil {
+					log.Printf("error creating directory for %s: %s\n", archDir, dirErr)
+					return false
+				}
+			} else {
+				log.Printf("error inspecting %s: %s\n", archDir, err)
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func inspectPackage(filename string) string {
