@@ -29,6 +29,11 @@ type Conf struct {
 	SupportArch  []string `json:"supportedArch"`
 }
 
+type DeleteObj struct {
+	Filename string
+	Arch     string
+}
+
 var sem = make(semaphore, 1)
 var configFile = flag.String("c", "conf.json", "config file location")
 var config = &Conf{}
@@ -50,6 +55,7 @@ func main() {
 	}
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(config.RootRepoPath))))
 	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/delete", deleteHandler)
 	http.ListenAndServe(":"+config.ListenPort, nil)
 }
 
@@ -228,6 +234,28 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("lock returned")
 	} else {
 		log.Println("not a POST")
+	}
+}
+
+func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "DELETE" {
+		decoder := json.NewDecoder(r.Body)
+		var toDelete DeleteObj
+		err := decoder.Decode(&toDelete)
+		if err != nil {
+			log.Println("error decoding DELETE json: ", err)
+		}
+		err = os.Remove(config.RootRepoPath + "/dists/stable/main/binary-" + toDelete.Arch + "/" + toDelete.Filename)
+		log.Println("grabbing lock...")
+		sem.Lock()
+		log.Println("got lock, updating package list...")
+		if !createPackagesTar(toDelete.Arch) {
+			log.Println("unable to create Packages.gz")
+		}
+		sem.Unlock()
+		log.Println("lock returned")
+	} else {
+		log.Println("not a DELETE")
 	}
 }
 
