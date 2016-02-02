@@ -155,7 +155,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 	return ""
 }
 
-func createPackagesTar(arch string) bool {
+func createPackagesGz(arch string) bool {
 	var packBuf bytes.Buffer
 	// loop through each directory
 	// run inspectPackage
@@ -227,7 +227,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("grabbing lock...")
 		sem.Lock()
 		log.Println("got lock, updating package list...")
-		if !createPackagesTar(archType) {
+		if !createPackagesGz(archType) {
 			log.Println("unable to create Packages.gz")
 		}
 		sem.Unlock()
@@ -249,7 +249,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("grabbing lock...")
 		sem.Lock()
 		log.Println("got lock, updating package list...")
-		if !createPackagesTar(toDelete.Arch) {
+		if !createPackagesGz(toDelete.Arch) {
 			log.Println("unable to create Packages.gz")
 		}
 		sem.Unlock()
