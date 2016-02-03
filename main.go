@@ -27,6 +27,9 @@ type Conf struct {
 	ListenPort   string   `json:"listenPort"`
 	RootRepoPath string   `json:"rootRepoPath"`
 	SupportArch  []string `json:"supportedArch"`
+	EnableSSL    bool     `json:"enableSSL"`
+	SSLCert      string   `json:"SSLcert"`
+	SSLKey       string   `json:"SSLkey"`
 }
 
 type DeleteObj struct {
@@ -56,7 +59,13 @@ func main() {
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(config.RootRepoPath))))
 	http.HandleFunc("/upload", uploadHandler)
 	http.HandleFunc("/delete", deleteHandler)
-	http.ListenAndServe(":"+config.ListenPort, nil)
+	if config.EnableSSL {
+		log.Println("running with SSL enabled")
+		log.Fatal(http.ListenAndServeTLS(":"+config.ListenPort, config.SSLCert, config.SSLKey, nil))
+	} else {
+		log.Println("running without SSL enabled")
+		log.Fatal(http.ListenAndServe(":"+config.ListenPort, nil))
+	}
 }
 
 func createDirs() bool {
