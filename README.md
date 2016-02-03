@@ -26,7 +26,7 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 - [x] Remove dpkg-scanpackages from the equation
 - [x] Remove gzip from the equation
 - [x] Actually handle multi-arch repos
-- [ ] Support SSL
+- [x] Support SSL
 - [x] Add delete ability
 
 # Usage:
