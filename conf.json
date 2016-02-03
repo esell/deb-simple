@@ -1,5 +1,8 @@
 {
 	"listenPort":"9090",
-	"rootRepoPath":"/Users/eujon/go/src/github.com/esell/deb-simple/repo",
-	"supportedArch":["all","i386","amd64"]
+	"rootRepoPath":"/opt/repo",
+	"supportedArch":["all","i386","amd64"],
+	"enableSSL" : true,
+	"SSLcert" : "server.crt",
+	"SSLkey" : "server.key"
 }
