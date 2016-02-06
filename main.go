@@ -39,7 +39,7 @@ type DeleteObj struct {
 
 var sem = make(semaphore, 1)
 var configFile = flag.String("c", "conf.json", "config file location")
-var config = &Conf{}
+var parsedConfig = &Conf{}
 
 func main() {
 	flag.Parse()
@@ -47,28 +47,28 @@ func main() {
 	if err != nil {
 		log.Panic("unable to read config file, exiting...")
 	}
-	config = &Conf{}
-	if err := json.Unmarshal(file, &config); err != nil {
+	//config = &Conf{}
+	if err := json.Unmarshal(file, &parsedConfig); err != nil {
 		log.Panic("unable to marshal config file, exiting...")
 	}
 
-	if !createDirs() {
+	if !createDirs(*parsedConfig) {
 		log.Println("error creating directory structure, exiting")
 		os.Exit(1)
 	}
-	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(config.RootRepoPath))))
-	http.HandleFunc("/upload", uploadHandler)
-	http.HandleFunc("/delete", deleteHandler)
-	if config.EnableSSL {
+	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
+	http.Handle("/upload", uploadHandler(*parsedConfig))
+	http.Handle("/delete", deleteHandler(*parsedConfig))
+	if parsedConfig.EnableSSL {
 		log.Println("running with SSL enabled")
-		log.Fatal(http.ListenAndServeTLS(":"+config.ListenPort, config.SSLCert, config.SSLKey, nil))
+		log.Fatal(http.ListenAndServeTLS(":"+parsedConfig.ListenPort, parsedConfig.SSLCert, parsedConfig.SSLKey, nil))
 	} else {
 		log.Println("running without SSL enabled")
-		log.Fatal(http.ListenAndServe(":"+config.ListenPort, nil))
+		log.Fatal(http.ListenAndServe(":"+parsedConfig.ListenPort, nil))
 	}
 }
 
-func createDirs() bool {
+func createDirs(config Conf) bool {
 	for _, archDir := range config.SupportArch {
 		if _, err := os.Stat(config.RootRepoPath + "/dists/stable/main/binary-" + archDir); err != nil {
 			if os.IsNotExist(err) {
@@ -164,7 +164,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 	return ""
 }
 
-func createPackagesGz(arch string) bool {
+func createPackagesGz(config *Conf, arch string) bool {
 	var packBuf bytes.Buffer
 	// loop through each directory
 	// run inspectPackage
@@ -209,63 +209,67 @@ func createPackagesGz(arch string) bool {
 	return true
 }
 
-func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		archType := r.FormValue("arch")
-		if archType == "" {
-			archType = "all"
+func uploadHandler(config Conf) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			archType := r.FormValue("arch")
+			if archType == "" {
+				archType = "all"
+			}
+			log.Println("archType is: ", archType)
+			file, header, err := r.FormFile("file")
+			if err != nil {
+				log.Println("error parsing file: ", err)
+			}
+			log.Println("filename is: ", header.Filename)
+			out, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archType + "/" + header.Filename)
+			if err != nil {
+				log.Println("error creating file: ", err)
+			}
+			hash := md5.New()
+			_, err = io.Copy(out, io.TeeReader(file, hash))
+			defer file.Close()
+			if err != nil {
+				log.Println("error saving file: ", err)
+			}
+			md5sum := hex.EncodeToString(hash.Sum(nil))
+			log.Println("md5sum = ", md5sum)
+			log.Println("grabbing lock...")
+			sem.Lock()
+			log.Println("got lock, updating package list...")
+			if !createPackagesGz(&config, archType) {
+				log.Println("unable to create Packages.gz")
+			}
+			sem.Unlock()
+			log.Println("lock returned")
+		} else {
+			log.Println("not a POST")
 		}
-		log.Println("archType is: ", archType)
-		file, header, err := r.FormFile("file")
-		if err != nil {
-			log.Println("error parsing file: ", err)
-		}
-		log.Println("filename is: ", header.Filename)
-		out, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archType + "/" + header.Filename)
-		if err != nil {
-			log.Println("error creating file: ", err)
-		}
-		hash := md5.New()
-		_, err = io.Copy(out, io.TeeReader(file, hash))
-		defer file.Close()
-		if err != nil {
-			log.Println("error saving file: ", err)
-		}
-		md5sum := hex.EncodeToString(hash.Sum(nil))
-		log.Println("md5sum = ", md5sum)
-		log.Println("grabbing lock...")
-		sem.Lock()
-		log.Println("got lock, updating package list...")
-		if !createPackagesGz(archType) {
-			log.Println("unable to create Packages.gz")
-		}
-		sem.Unlock()
-		log.Println("lock returned")
-	} else {
-		log.Println("not a POST")
-	}
+	})
 }
 
-func deleteHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "DELETE" {
-		decoder := json.NewDecoder(r.Body)
-		var toDelete DeleteObj
-		err := decoder.Decode(&toDelete)
-		if err != nil {
-			log.Println("error decoding DELETE json: ", err)
+func deleteHandler(config Conf) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "DELETE" {
+			decoder := json.NewDecoder(r.Body)
+			var toDelete DeleteObj
+			err := decoder.Decode(&toDelete)
+			if err != nil {
+				log.Println("error decoding DELETE json: ", err)
+			}
+			err = os.Remove(config.RootRepoPath + "/dists/stable/main/binary-" + toDelete.Arch + "/" + toDelete.Filename)
+			log.Println("grabbing lock...")
+			sem.Lock()
+			log.Println("got lock, updating package list...")
+			if !createPackagesGz(&config, toDelete.Arch) {
+				log.Println("unable to create Packages.gz")
+			}
+			sem.Unlock()
+			log.Println("lock returned")
+		} else {
+			log.Println("not a DELETE")
 		}
-		err = os.Remove(config.RootRepoPath + "/dists/stable/main/binary-" + toDelete.Arch + "/" + toDelete.Filename)
-		log.Println("grabbing lock...")
-		sem.Lock()
-		log.Println("got lock, updating package list...")
-		if !createPackagesGz(toDelete.Arch) {
-			log.Println("unable to create Packages.gz")
-		}
-		sem.Unlock()
-		log.Println("lock returned")
-	} else {
-		log.Println("not a DELETE")
-	}
+	})
 }
 
 func (s semaphore) Lock() {
