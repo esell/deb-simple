@@ -1,0 +1,8 @@
+language: go
+
+go:
+  - 1.5
+
+script:
+  - go get github.com/blakesmith/ar 
+  - go test -v ./...
