@@ -95,7 +95,7 @@ func inspectPackage(filename string) string {
 	}
 
 	arReader := ar.NewReader(f)
-	f.Close()
+	defer f.Close()
 	var controlBuf bytes.Buffer
 
 	for {
@@ -204,8 +204,8 @@ func createPackagesGz(config *Conf, arch string) bool {
 	gzOut := gzip.NewWriter(outfile)
 	gzOut.Write(packBuf.Bytes())
 	gzOut.Flush()
-	outfile.Close()
-	gzOut.Close()
+	defer outfile.Close()
+	defer gzOut.Close()
 	return true
 }
 
@@ -230,8 +230,8 @@ func uploadHandler(config Conf) http.Handler {
 			if err != nil {
 				log.Println("error saving file: ", err)
 			}
-			file.Close()
-			out.Close()
+			defer file.Close()
+			defer out.Close()
 			log.Println("grabbing lock...")
 			sem.Lock()
 			log.Println("got lock, updating package list...")
