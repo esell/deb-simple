@@ -34,9 +34,11 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 Install using `go get`. Fill out the conf.json file with the values you want, it should be pretty self-explanatory, then fire it up!
 
 Once it is running POST a file to the `/upload` endpoint:
+
 `curl -XPOST 'http://localhost:9090/upload' -F "file=@myapp.deb" -F "arch=amd64"`
 
 Or delete an existing file:
+
 `curl -XDELETE 'http://localhost:9090/delete' -d '{"filename":"myapp.deb","arch":"amd64"}'`
 
 
