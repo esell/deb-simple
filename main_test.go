@@ -3,9 +3,14 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/md5"
+	"encoding/hex"
 	"io"
 	"io/ioutil"
 	"log"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 )
@@ -100,6 +105,13 @@ func TestCreateDirs(t *testing.T) {
 	}
 }
 
+func TestInspectPackage(t *testing.T) {
+	parsedControl := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	if parsedControl != goodOutput {
+		t.Errorf("control file does not match")
+	}
+}
+
 func TestInspectPackageControl(t *testing.T) {
 	sampleDeb, err := ioutil.ReadFile("samples/control.tar.gz")
 	if err != nil {
@@ -113,13 +125,6 @@ func TestInspectPackageControl(t *testing.T) {
 		t.Errorf("control file does not match")
 	}
 
-}
-
-func TestInspectPackage(t *testing.T) {
-	parsedControl := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
-	if parsedControl != goodOutput {
-		t.Errorf("control file does not match")
-	}
 }
 
 func TestCreatePackagesGz(t *testing.T) {
@@ -171,4 +176,80 @@ func TestCreatePackagesGz(t *testing.T) {
 		t.Errorf("Packages.gz does not match, returned value is: %s", string(buf.Bytes()))
 	}
 
+	// cleanup
+	if err := os.RemoveAll(config.RootRepoPath); err != nil {
+		t.Errorf("error cleaning up after createPackagesGz(): ", err)
+	}
+
+}
+
+func TestUploadHandler(t *testing.T) {
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("Unable to get current working directory: %s", err)
+	}
+	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	// sanity check...
+	if config.RootRepoPath != pwd+"/testing" {
+		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
+	}
+	uploadHandle := uploadHandler(*config)
+	// GET
+	req, _ := http.NewRequest("GET", "", nil)
+	w := httptest.NewRecorder()
+	uploadHandle.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("uploadHandler GET returned %v, should be %v", w.Code, http.StatusOK)
+	}
+
+	// POST
+	// create "all" arch as it's the default
+	dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755)
+	if dirErr != nil {
+		log.Printf("error creating directory for POST testing")
+	}
+	sampleDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	if err != nil {
+		t.Errorf("error opening sample deb file: %s", err)
+	}
+	defer sampleDeb.Close()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	if err != nil {
+		t.Errorf("error FormFile: %s", err)
+	}
+	_, err = io.Copy(part, sampleDeb)
+	if err != nil {
+		t.Errorf("error copying sampleDeb to FormFile: %s", err)
+	}
+	err = writer.Close()
+	if err != nil {
+		t.Errorf("error closing form writer: %s", err)
+	}
+	req, _ = http.NewRequest("POST", "", body)
+	req.Header.Add("Content-Type", writer.FormDataContentType())
+	w = httptest.NewRecorder()
+	uploadHandle.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("uploadHandler POST returned %v, should be %v", w.Code, http.StatusOK)
+	}
+	// verify uploaded file matches sample
+	uploadFile, _ := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-all/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	uploadmd5hash := md5.New()
+	io.WriteString(uploadmd5hash, string(uploadFile[:]))
+	uploadFilemd5 := hex.EncodeToString(uploadmd5hash.Sum(nil))
+
+	sampleFile, _ := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-all/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	samplemd5hash := md5.New()
+	io.WriteString(samplemd5hash, string(sampleFile[:]))
+	sampleFilemd5 := hex.EncodeToString(samplemd5hash.Sum(nil))
+	if uploadFilemd5 != sampleFilemd5 {
+		t.Errorf("uploaded file MD5 is %s, should be %s", uploadFilemd5, sampleFilemd5)
+	}
+
+	// cleanup
+	if err := os.RemoveAll(config.RootRepoPath); err != nil {
+		t.Errorf("error cleaning up after uploadHandler(): ", err)
+	}
 }
