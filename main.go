@@ -93,9 +93,9 @@ func inspectPackage(filename string) string {
 		log.Printf("error opening package file %s: %s\n", filename, err)
 		return ""
 	}
-	defer f.Close()
 
 	arReader := ar.NewReader(f)
+	f.Close()
 	var controlBuf bytes.Buffer
 
 	for {
@@ -201,11 +201,11 @@ func createPackagesGz(config *Conf, arch string) bool {
 		log.Println("error creating packages.gz file")
 		return false
 	}
-	defer outfile.Close()
 	gzOut := gzip.NewWriter(outfile)
-	defer gzOut.Close()
 	gzOut.Write(packBuf.Bytes())
 	gzOut.Flush()
+	outfile.Close()
+	gzOut.Close()
 	return true
 }
 
@@ -226,14 +226,12 @@ func uploadHandler(config Conf) http.Handler {
 			if err != nil {
 				log.Println("error creating file: ", err)
 			}
-			hash := md5.New()
-			_, err = io.Copy(out, io.TeeReader(file, hash))
-			defer file.Close()
+			_, err = io.Copy(out, file)
 			if err != nil {
 				log.Println("error saving file: ", err)
 			}
-			md5sum := hex.EncodeToString(hash.Sum(nil))
-			log.Println("md5sum = ", md5sum)
+			file.Close()
+			out.Close()
 			log.Println("grabbing lock...")
 			sem.Lock()
 			log.Println("got lock, updating package list...")
