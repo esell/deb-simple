@@ -253,3 +253,51 @@ func TestUploadHandler(t *testing.T) {
 		t.Errorf("error cleaning up after uploadHandler(): ", err)
 	}
 }
+
+func BenchmarkUploadHandler(b *testing.B) {
+	log.SetOutput(ioutil.Discard)
+	pwd, err := os.Getwd()
+	if err != nil {
+		log.Printf("Unable to get current working directory: %s", err)
+	}
+	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	// sanity check...
+	if config.RootRepoPath != pwd+"/testing" {
+		log.Printf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
+	}
+	uploadHandle := uploadHandler(*config)
+	dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755)
+	if dirErr != nil {
+		log.Printf("error creating directory for POST testing")
+	}
+	sampleDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	if err != nil {
+		log.Printf("error opening sample deb file: %s", err)
+	}
+	defer sampleDeb.Close()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	if err != nil {
+		log.Printf("error FormFile: %s", err)
+	}
+	_, err = io.Copy(part, sampleDeb)
+	if err != nil {
+		log.Printf("error copying sampleDeb to FormFile: %s", err)
+	}
+	err = writer.Close()
+	if err != nil {
+		log.Printf("error closing form writer: %s", err)
+	}
+	req, _ := http.NewRequest("POST", "", body)
+	req.Header.Add("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	uploadHandle.ServeHTTP(w, req)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		uploadHandle.ServeHTTP(w, req)
+	}
+	b.StopTimer()
+	// cleanup
+	_ = os.RemoveAll(config.RootRepoPath)
+}
