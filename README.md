@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/esell/deb-simple.svg?branch=master)](https://travis-ci.org/esell/deb-simple)
+
 # deb-simple (get it? dead simple.. deb simple...)
 
 A lightweight, bare-bones apt repository server. 
