@@ -14,13 +14,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/blakesmith/ar"
-	"github.com/pkg/profile"
 )
 
 type semaphore chan int
@@ -44,7 +42,6 @@ var configFile = flag.String("c", "conf.json", "config file location")
 var parsedConfig = &Conf{}
 
 func main() {
-	defer profile.Start(profile.MemProfile, profile.ProfilePath("."), profile.NoShutdownHook).Stop()
 	flag.Parse()
 	file, err := ioutil.ReadFile(*configFile)
 	if err != nil {
