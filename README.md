@@ -14,7 +14,9 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 # What it does:
 
 - Supports multiple versions of packages 
-- Supports uploading via HTTP POST requests
+- Supports multi-arch repos (i386, amd64, custom, etc)
+- Supports uploading via HTTP/HTTPS POST requests
+- Supports removing packages via HTTP/HTTPS DELETE requests
 - Does NOT require a changes file
 - Supports uploads from various locations without corrupting the repo
 
@@ -23,13 +25,6 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 - Create actual packages
 - Mirror existing repos
 
-# TODO:
-
-- [x] Remove dpkg-scanpackages from the equation
-- [x] Remove gzip from the equation
-- [x] Actually handle multi-arch repos
-- [x] Support SSL
-- [x] Add delete ability
 
 # Usage:
 
@@ -37,7 +32,7 @@ Install using `go get`. Fill out the conf.json file with the values you want, it
 
 Once it is running POST a file to the `/upload` endpoint:
 
-`curl -XPOST 'http://localhost:9090/upload' -F "file=@myapp.deb" -F "arch=amd64"`
+`curl -XPOST 'http://localhost:9090/upload?arch=amd64' -F "file=@myapp.deb"`
 
 Or delete an existing file:
 
