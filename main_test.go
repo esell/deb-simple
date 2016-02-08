@@ -240,7 +240,7 @@ func TestUploadHandler(t *testing.T) {
 	io.WriteString(uploadmd5hash, string(uploadFile[:]))
 	uploadFilemd5 := hex.EncodeToString(uploadmd5hash.Sum(nil))
 
-	sampleFile, _ := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-all/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	sampleFile, _ := ioutil.ReadFile("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	samplemd5hash := md5.New()
 	io.WriteString(samplemd5hash, string(sampleFile[:]))
 	sampleFilemd5 := hex.EncodeToString(samplemd5hash.Sum(nil))

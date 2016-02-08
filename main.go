@@ -152,12 +152,11 @@ func inspectPackageControl(filename bytes.Buffer) string {
 		case tar.TypeReg:
 			if name == "./control" {
 				io.Copy(&controlBuf, tarReader)
-				log.Printf("control file: %s\n", controlBuf.String())
 				return controlBuf.String()
 			}
 		default:
 			log.Printf("%s : %c %s %s\n",
-				"Yikes! Unable to figure out type",
+				"Unable to figure out type",
 				header.Typeflag,
 				"in file",
 				name,
@@ -190,21 +189,35 @@ func createPackagesGz(config *Conf, arch string) bool {
 			packBuf.WriteString(tempCtlData)
 			packBuf.WriteString("Filename: " + "dists/stable/main/binary-" + arch + "/" + debFile.Name() + "\n")
 			packBuf.WriteString("Size: " + strconv.FormatInt(debFile.Size(), 10) + "\n")
-			f, _ := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
+			f, err := os.Open(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
+			if err != nil {
+				log.Println("error opening deb file: ", err)
+			}
+			defer f.Close()
 			md5hash := md5.New()
-			io.WriteString(md5hash, string(f[:]))
+			sha1hash := sha1.New()
+			sha256hash := sha256.New()
+			_, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f)
+			if err != nil {
+				log.Println("error with the md5 hash: ", err)
+			}
 			md5sum := hex.EncodeToString(md5hash.Sum(nil))
 			packBuf.WriteString("MD5sum: " + md5sum + "\n")
-			sha1hash := sha1.New()
-			io.WriteString(sha1hash, string(f[:]))
+			_, err = io.Copy(sha1hash, f)
+			if err != nil {
+				log.Println("error with the sha1 hash: ", err)
+			}
 			sha1sum := hex.EncodeToString(sha1hash.Sum(nil))
 			packBuf.WriteString("SHA1: " + sha1sum + "\n")
-			sha256hash := sha256.New()
-			io.WriteString(sha256hash, string(f[:]))
+			_, err = io.Copy(sha256hash, f)
+			if err != nil {
+				log.Println("error with the sha256 hash: ", err)
+			}
 			sha256sum := hex.EncodeToString(sha256hash.Sum(nil))
 			packBuf.WriteString("SHA256: " + sha256sum + "\n")
 			packBuf.WriteString("\n\n")
 			gzOut.Write(packBuf.Bytes())
+			f = nil
 		}
 	}
 
@@ -215,38 +228,52 @@ func createPackagesGz(config *Conf, arch string) bool {
 func uploadHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
-			archType := r.FormValue("arch")
-			if archType == "" {
-				archType = "all"
+			queryVals := r.URL.Query()
+			archType := "all"
+			if queryVals.Get("arch") != "" {
+				archType = queryVals.Get("arch")
 			}
-			log.Println("archType is: ", archType)
-			file, header, err := r.FormFile("file")
+			reader, err := r.MultipartReader()
 			if err != nil {
-				log.Println("error parsing file: ", err)
+				log.Println("error creating multipart reader: ", err)
 				return
 			}
-			defer file.Close()
-			log.Println("filename is: ", header.Filename)
-			out, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archType + "/" + header.Filename)
-			if err != nil {
-				log.Println("error creating file: ", err)
-				return
+			for {
+				part, err := reader.NextPart()
+				if err == io.EOF {
+					log.Println("breaking")
+					break
+				}
+				log.Println("form part: ", part.FormName())
+				if part.FileName() == "" {
+					continue
+				}
+				log.Println("found file: ", part.FileName())
+				log.Println("creating files: ", part.FileName())
+				dst, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archType + "/" + part.FileName())
+				defer dst.Close()
+				if err != nil {
+					log.Println("error creating deb file: ", err)
+					//http.Error(w, err.Error(), http.StatusInternalServerError)
+					//return
+				}
+				if _, err := io.Copy(dst, part); err != nil {
+					log.Println("error writing deb file: ", err)
+					///http.Error(w, err.Error(), http.StatusInternalServerError)
+					//return
+				}
 			}
-			defer out.Close()
-			_, err = io.Copy(out, file)
-			if err != nil {
-				log.Println("error saving file: ", err)
-				return
-			}
+
 			log.Println("grabbing lock...")
 			sem.Lock()
 			log.Println("got lock, updating package list...")
-			if !createPackagesGz(&config, archType) {
+			createPkgRes := createPackagesGz(&config, archType)
+			if !createPkgRes {
 				log.Println("unable to create Packages.gz")
 			}
 			sem.Unlock()
 			log.Println("lock returned")
-			return
+			w.WriteHeader(http.StatusOK)
 		} else {
 			log.Println("not a POST")
 			return
