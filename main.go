@@ -166,11 +166,10 @@ func inspectPackageControl(filename bytes.Buffer) string {
 	return ""
 }
 
-func createPackagesGz(config *Conf, arch string) bool {
+func createPackagesGz(config *Conf, arch string) error {
 	outfile, err := os.Create(filepath.Join(config.ArchPath(arch), "Packages.gz"))
 	if err != nil {
-		log.Println("error creating packages.gz file")
-		return false
+		return fmt.Errorf("failed to create packages.gz: %s", err)
 	}
 	defer outfile.Close()
 	gzOut := gzip.NewWriter(outfile)
@@ -179,8 +178,7 @@ func createPackagesGz(config *Conf, arch string) bool {
 	// run inspectPackage
 	dirList, err := ioutil.ReadDir(config.ArchPath(arch))
 	if err != nil {
-		log.Printf("error scanning %s: %s\n", config.ArchPath(arch), err)
-		return false
+		return fmt.Errorf("scanning: %s: %s", config.ArchPath(arch), err)
 	}
 	for _, debFile := range dirList {
 		if strings.HasSuffix(debFile.Name(), "deb") {
@@ -225,83 +223,92 @@ func createPackagesGz(config *Conf, arch string) bool {
 	}
 
 	gzOut.Flush()
-	return true
+	return nil
 }
 
 func uploadHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			queryVals := r.URL.Query()
-			archType := "all"
-			if queryVals.Get("arch") != "" {
-				archType = queryVals.Get("arch")
-			}
-			reader, err := r.MultipartReader()
-			if err != nil {
-				log.Println("error creating multipart reader: ", err)
-				return
-			}
-			for {
-				part, err := reader.NextPart()
-				if err == io.EOF {
-					log.Println("breaking")
-					break
-				}
-				log.Println("form part: ", part.FormName())
-				if part.FileName() == "" {
-					continue
-				}
-				log.Println("found file: ", part.FileName())
-				log.Println("creating files: ", part.FileName())
-				dst, err := os.Create(filepath.Join(config.ArchPath(archType), part.FileName()))
-				defer dst.Close()
-				if err != nil {
-					log.Println("error creating deb file: ", err)
-					//http.Error(w, err.Error(), http.StatusInternalServerError)
-					//return
-				}
-				if _, err := io.Copy(dst, part); err != nil {
-					log.Println("error writing deb file: ", err)
-					///http.Error(w, err.Error(), http.StatusInternalServerError)
-					//return
-				}
-			}
-
-			log.Println("grabbing lock...")
-			mutex.Lock()
-			log.Println("got lock, updating package list...")
-			createPkgRes := createPackagesGz(&config, archType)
-			if !createPkgRes {
-				log.Println("unable to create Packages.gz")
-			}
-			mutex.Unlock()
-			log.Println("lock returned")
-			w.WriteHeader(http.StatusOK)
-		} else {
+		if r.Method != "POST" {
 			log.Println("not a POST")
 			return
 		}
+		queryVals := r.URL.Query()
+		archType := "all"
+		if queryVals.Get("arch") != "" {
+			archType = queryVals.Get("arch")
+		}
+		reader, err := r.MultipartReader()
+		if err != nil {
+			httpErrorf(w, "error creating multipart reader: %s", err)
+			return
+		}
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				log.Println("breaking")
+				break
+			}
+			log.Println("form part: ", part.FormName())
+			if part.FileName() == "" {
+				continue
+			}
+			log.Println("found file: ", part.FileName())
+			log.Println("creating files: ", part.FileName())
+			dst, err := os.Create(filepath.Join(config.ArchPath(archType), part.FileName()))
+			if err != nil {
+				httpErrorf(w, "error creating deb file: %s", err)
+				return
+			}
+			defer dst.Close()
+			if _, err := io.Copy(dst, part); err != nil {
+				httpErrorf(w, "error writing deb file: %s", err)
+				return
+			}
+		}
+
+		log.Println("grabbing lock...")
+		mutex.Lock()
+		log.Println("got lock, updating package list...")
+		createPkgRes := createPackagesGz(&config, archType)
+		if err := createPkgRes; err != nil {
+			log.Println("error: ", err)
+		}
+		mutex.Unlock()
+		log.Println("lock returned")
+		w.WriteHeader(http.StatusOK)
 	})
 }
 
 func deleteHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "DELETE" {
-			var toDelete DeleteObj
-			if err := json.NewDecoder(r.Body).Decode(&toDelete); err != nil {
-				log.Println("error decoding DELETE json: ", err)
-			}
-			os.Remove(filepath.Join(config.ArchPath(toDelete.Arch), toDelete.Filename))
-			log.Println("grabbing lock...")
-			mutex.Lock()
-			log.Println("got lock, updating package list...")
-			if !createPackagesGz(&config, toDelete.Arch) {
-				log.Println("unable to create Packages.gz")
-			}
-			mutex.Unlock()
-			log.Println("lock returned")
-		} else {
+		if r.Method != "DELETE" {
 			log.Println("not a DELETE")
+			return
 		}
+		var toDelete DeleteObj
+		if err := json.NewDecoder(r.Body).Decode(&toDelete); err != nil {
+			httpErrorf(w, "failed to decode json: %s", err)
+			return
+		}
+		debPath := filepath.Join(config.ArchPath(toDelete.Arch), toDelete.Filename)
+		if err := os.Remove(debPath); err != nil {
+			httpErrorf(w, "failed to delete: %s", err)
+			return
+		}
+		log.Println("grabbing lock...")
+		mutex.Lock()
+		log.Println("got lock, updating package list...")
+		if err := createPackagesGz(&config, toDelete.Arch); err != nil {
+			httpErrorf(w, "failed to delete: %s", err)
+			return
+		}
+		mutex.Unlock()
+		log.Println("lock returned")
 	})
+}
+
+func httpErrorf(w http.ResponseWriter, format string, a ...interface{}) {
+	err := fmt.Errorf(format, a...)
+	log.Println(err)
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
