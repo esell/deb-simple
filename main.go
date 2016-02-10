@@ -299,7 +299,7 @@ func deleteHandler(config Conf) http.Handler {
 		mutex.Lock()
 		log.Println("got lock, updating package list...")
 		if err := createPackagesGz(&config, toDelete.Arch); err != nil {
-			httpErrorf(w, "failed to delete: %s", err)
+			httpErrorf(w, "failed to create package: %s", err)
 			return
 		}
 		mutex.Unlock()
