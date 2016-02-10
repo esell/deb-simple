@@ -18,14 +18,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/blakesmith/ar"
 )
-
-type semaphore chan int
-
-func (s semaphore) Lock()   { s <- 1 }
-func (s semaphore) Unlock() { <-s }
 
 type Conf struct {
 	ListenPort   string   `json:"listenPort"`
@@ -45,7 +41,7 @@ type DeleteObj struct {
 	Arch     string
 }
 
-var sem = make(semaphore, 1)
+var mutex sync.Mutex
 var configFile = flag.String("c", "conf.json", "config file location")
 var parsedConfig = &Conf{}
 
@@ -272,13 +268,13 @@ func uploadHandler(config Conf) http.Handler {
 			}
 
 			log.Println("grabbing lock...")
-			sem.Lock()
+			mutex.Lock()
 			log.Println("got lock, updating package list...")
 			createPkgRes := createPackagesGz(&config, archType)
 			if !createPkgRes {
 				log.Println("unable to create Packages.gz")
 			}
-			sem.Unlock()
+			mutex.Unlock()
 			log.Println("lock returned")
 			w.WriteHeader(http.StatusOK)
 		} else {
@@ -297,12 +293,12 @@ func deleteHandler(config Conf) http.Handler {
 			}
 			os.Remove(filepath.Join(config.ArchPath(toDelete.Arch), toDelete.Filename))
 			log.Println("grabbing lock...")
-			sem.Lock()
+			mutex.Lock()
 			log.Println("got lock, updating package list...")
 			if !createPackagesGz(&config, toDelete.Arch) {
 				log.Println("unable to create Packages.gz")
 			}
-			sem.Unlock()
+			mutex.Unlock()
 			log.Println("lock returned")
 		} else {
 			log.Println("not a DELETE")
