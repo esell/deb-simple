@@ -159,7 +159,7 @@ func TestCreatePackagesGz(t *testing.T) {
 			t.Errorf("error saving copy of deb: ", err)
 		}
 	}
-	if !createPackagesGz(config, "cats") {
+	if err := createPackagesGz(config, "cats"); err != nil {
 		t.Errorf("error creating packages gzip for cats")
 	}
 	pkgGzip, err := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
