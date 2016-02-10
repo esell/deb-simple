@@ -45,16 +45,15 @@ func main() {
 	flag.Parse()
 	file, err := ioutil.ReadFile(*configFile)
 	if err != nil {
-		log.Panic("unable to read config file, exiting...")
+		log.Fatal("unable to read config file, exiting...")
 	}
 	//config = &Conf{}
 	if err := json.Unmarshal(file, &parsedConfig); err != nil {
-		log.Panic("unable to marshal config file, exiting...")
+		log.Fatal("unable to marshal config file, exiting...")
 	}
 
 	if !createDirs(*parsedConfig) {
-		log.Println("error creating directory structure, exiting")
-		os.Exit(1)
+		log.Fatal("error creating directory structure, exiting")
 	}
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
 	http.Handle("/upload", uploadHandler(*parsedConfig))
