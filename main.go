@@ -10,18 +10,22 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"path/filepath"
 	"strings"
 
 	"github.com/blakesmith/ar"
 )
 
 type semaphore chan int
+
+func (s semaphore) Lock()   { s <- 1 }
+func (s semaphore) Unlock() { <-s }
 
 type Conf struct {
 	ListenPort   string   `json:"listenPort"`
@@ -30,6 +34,10 @@ type Conf struct {
 	EnableSSL    bool     `json:"enableSSL"`
 	SSLCert      string   `json:"SSLcert"`
 	SSLKey       string   `json:"SSLkey"`
+}
+
+func (c Conf) ArchPath(arch string) string {
+	return filepath.Join(c.RootRepoPath, "/dists/stable/main/binary-"+arch)
 }
 
 type DeleteObj struct {
@@ -68,17 +76,17 @@ func main() {
 }
 
 func createDirs(config Conf) bool {
-	for _, archDir := range config.SupportArch {
-		if _, err := os.Stat(config.RootRepoPath + "/dists/stable/main/binary-" + archDir); err != nil {
+	for _, arch := range config.SupportArch {
+		if _, err := os.Stat(config.ArchPath(arch)); err != nil {
 			if os.IsNotExist(err) {
-				log.Printf("Directory for %s does not exist, creating", archDir)
-				dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-"+archDir, 0755)
+				log.Printf("Directory for %s does not exist, creating", arch)
+				dirErr := os.MkdirAll(config.ArchPath(arch), 0755)
 				if dirErr != nil {
-					log.Printf("error creating directory for %s: %s\n", archDir, dirErr)
+					log.Printf("error creating directory for %s: %s\n", arch, dirErr)
 					return false
 				}
 			} else {
-				log.Printf("error inspecting %s: %s\n", archDir, err)
+				log.Printf("error inspecting %s: %s\n", arch, err)
 				return false
 			}
 		}
@@ -163,7 +171,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 }
 
 func createPackagesGz(config *Conf, arch string) bool {
-	outfile, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/Packages.gz")
+	outfile, err := os.Create(filepath.Join(config.ArchPath(arch), "Packages.gz"))
 	if err != nil {
 		log.Println("error creating packages.gz file")
 		return false
@@ -173,44 +181,47 @@ func createPackagesGz(config *Conf, arch string) bool {
 	defer gzOut.Close()
 	// loop through each directory
 	// run inspectPackage
-	dirList, err := ioutil.ReadDir(config.RootRepoPath + "/dists/stable/main/binary-" + arch)
+	dirList, err := ioutil.ReadDir(config.ArchPath(arch))
 	if err != nil {
-		log.Printf("error scanning %s: %s\n", config.RootRepoPath+"/dists/stable/main/binary-"+arch, err)
+		log.Printf("error scanning %s: %s\n", config.ArchPath(arch), err)
 		return false
 	}
 	for _, debFile := range dirList {
 		if strings.HasSuffix(debFile.Name(), "deb") {
 			var packBuf bytes.Buffer
-			tempCtlData := inspectPackage(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
+			debPath := filepath.Join(config.ArchPath(arch), debFile.Name())
+			tempCtlData := inspectPackage(debPath)
 			packBuf.WriteString(tempCtlData)
-			packBuf.WriteString("Filename: " + "dists/stable/main/binary-" + arch + "/" + debFile.Name() + "\n")
-			packBuf.WriteString("Size: " + strconv.FormatInt(debFile.Size(), 10) + "\n")
-			f, err := os.Open(config.RootRepoPath + "/dists/stable/main/binary-" + arch + "/" + debFile.Name())
+			dir := filepath.Join("dists/stable/main/binary-"+arch, debFile.Name())
+			fmt.Fprintf(&packBuf, "Filename: %s\n", dir)
+			fmt.Fprintf(&packBuf, "Size: %d\n", debFile.Size())
+			f, err := os.Open(debPath)
 			if err != nil {
 				log.Println("error opening deb file: ", err)
 			}
 			defer f.Close()
-			md5hash := md5.New()
-			sha1hash := sha1.New()
-			sha256hash := sha256.New()
+
+			var (
+				md5hash    = md5.New()
+				sha1hash   = sha1.New()
+				sha256hash = sha256.New()
+			)
 			_, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f)
 			if err != nil {
 				log.Println("error with the md5 hash: ", err)
 			}
-			md5sum := hex.EncodeToString(md5hash.Sum(nil))
-			packBuf.WriteString("MD5sum: " + md5sum + "\n")
-			_, err = io.Copy(sha1hash, f)
-			if err != nil {
+			fmt.Fprintf(&packBuf, "MD5sum: %s\n",
+				hex.EncodeToString(md5hash.Sum(nil)))
+			if _, err = io.Copy(sha1hash, f); err != nil {
 				log.Println("error with the sha1 hash: ", err)
 			}
-			sha1sum := hex.EncodeToString(sha1hash.Sum(nil))
-			packBuf.WriteString("SHA1: " + sha1sum + "\n")
-			_, err = io.Copy(sha256hash, f)
-			if err != nil {
+			fmt.Fprintf(&packBuf, "SHA1: %s\n",
+				hex.EncodeToString(sha1hash.Sum(nil)))
+			if _, err = io.Copy(sha256hash, f); err != nil {
 				log.Println("error with the sha256 hash: ", err)
 			}
-			sha256sum := hex.EncodeToString(sha256hash.Sum(nil))
-			packBuf.WriteString("SHA256: " + sha256sum + "\n")
+			fmt.Fprintf(&packBuf, "SHA256: %s\n",
+				hex.EncodeToString(sha256hash.Sum(nil)))
 			packBuf.WriteString("\n\n")
 			gzOut.Write(packBuf.Bytes())
 			f = nil
@@ -246,7 +257,7 @@ func uploadHandler(config Conf) http.Handler {
 				}
 				log.Println("found file: ", part.FileName())
 				log.Println("creating files: ", part.FileName())
-				dst, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archType + "/" + part.FileName())
+				dst, err := os.Create(filepath.Join(config.ArchPath(archType), part.FileName()))
 				defer dst.Close()
 				if err != nil {
 					log.Println("error creating deb file: ", err)
@@ -280,13 +291,11 @@ func uploadHandler(config Conf) http.Handler {
 func deleteHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "DELETE" {
-			decoder := json.NewDecoder(r.Body)
 			var toDelete DeleteObj
-			err := decoder.Decode(&toDelete)
-			if err != nil {
+			if err := json.NewDecoder(r.Body).Decode(&toDelete); err != nil {
 				log.Println("error decoding DELETE json: ", err)
 			}
-			err = os.Remove(config.RootRepoPath + "/dists/stable/main/binary-" + toDelete.Arch + "/" + toDelete.Filename)
+			os.Remove(filepath.Join(config.ArchPath(toDelete.Arch), toDelete.Filename))
 			log.Println("grabbing lock...")
 			sem.Lock()
 			log.Println("got lock, updating package list...")
@@ -299,12 +308,4 @@ func deleteHandler(config Conf) http.Handler {
 			log.Println("not a DELETE")
 		}
 	})
-}
-
-func (s semaphore) Lock() {
-	s <- 1
-}
-
-func (s semaphore) Unlock() {
-	<-s
 }
