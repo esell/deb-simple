@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -86,7 +85,7 @@ func TestCreateDirs(t *testing.T) {
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
 	}
-	log.Println("creating temp dirs in ", config.RootRepoPath)
+	t.Log("creating temp dirs in ", config.RootRepoPath)
 	dirSuccess := createDirs(*config)
 	if err := dirSuccess; err != nil {
 		t.Errorf("createDirs() failed ")
@@ -153,7 +152,7 @@ func TestCreatePackagesGz(t *testing.T) {
 		// do not use the built-in createDirs() in case it is broken
 		dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-"+archDir, 0755)
 		if dirErr != nil {
-			log.Printf("error creating directory for %s: %s\n", archDir, dirErr)
+			t.Errorf("error creating directory for %s: %s\n", archDir, dirErr)
 		}
 		copyDeb, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archDir + "/test.deb")
 		if err != nil {
@@ -212,7 +211,7 @@ func TestUploadHandler(t *testing.T) {
 	// create "all" arch as it's the default
 	dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755)
 	if dirErr != nil {
-		log.Printf("error creating directory for POST testing")
+		t.Error("error creating directory for POST testing")
 	}
 	sampleDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
@@ -243,12 +242,12 @@ func TestUploadHandler(t *testing.T) {
 	// verify uploaded file matches sample
 	uploadFile, _ := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-all/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	uploadmd5hash := md5.New()
-	io.WriteString(uploadmd5hash, string(uploadFile[:]))
+	uploadmd5hash.Write(uploadFile)
 	uploadFilemd5 := hex.EncodeToString(uploadmd5hash.Sum(nil))
 
 	sampleFile, _ := ioutil.ReadFile("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	samplemd5hash := md5.New()
-	io.WriteString(samplemd5hash, string(sampleFile[:]))
+	samplemd5hash.Write(sampleFile)
 	sampleFilemd5 := hex.EncodeToString(samplemd5hash.Sum(nil))
 	if uploadFilemd5 != sampleFilemd5 {
 		t.Errorf("uploaded file MD5 is %s, should be %s", uploadFilemd5, sampleFilemd5)
@@ -261,39 +260,36 @@ func TestUploadHandler(t *testing.T) {
 }
 
 func BenchmarkUploadHandler(b *testing.B) {
-	log.SetOutput(ioutil.Discard)
 	pwd, err := os.Getwd()
 	if err != nil {
-		log.Printf("Unable to get current working directory: %s", err)
+		b.Errorf("Unable to get current working directory: %s", err)
 	}
 	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
-		log.Printf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
+		b.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
 	}
 	uploadHandle := uploadHandler(*config)
 	dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755)
 	if dirErr != nil {
-		log.Printf("error creating directory for POST testing")
+		b.Errorf("error creating directory for POST testing")
 	}
 	sampleDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
-		log.Printf("error opening sample deb file: %s", err)
+		b.Errorf("error opening sample deb file: %s", err)
 	}
 	defer sampleDeb.Close()
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("file", "vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
-		log.Printf("error FormFile: %s", err)
+		b.Errorf("error FormFile: %s", err)
 	}
-	_, err = io.Copy(part, sampleDeb)
-	if err != nil {
-		log.Printf("error copying sampleDeb to FormFile: %s", err)
+	if _, err := io.Copy(part, sampleDeb); err != nil {
+		b.Errorf("error copying sampleDeb to FormFile: %s", err)
 	}
-	err = writer.Close()
-	if err != nil {
-		log.Printf("error closing form writer: %s", err)
+	if err := writer.Close(); err != nil {
+		b.Errorf("error closing form writer: %s", err)
 	}
 	req, _ := http.NewRequest("POST", "", body)
 	req.Header.Add("Content-Type", writer.FormDataContentType())
