@@ -279,24 +279,26 @@ func BenchmarkUploadHandler(b *testing.B) {
 		b.Errorf("error opening sample deb file: %s", err)
 	}
 	defer sampleDeb.Close()
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("file", "vim-tiny_7.4.052-1ubuntu3_amd64.deb")
-	if err != nil {
-		b.Errorf("error FormFile: %s", err)
-	}
-	if _, err := io.Copy(part, sampleDeb); err != nil {
-		b.Errorf("error copying sampleDeb to FormFile: %s", err)
-	}
-	if err := writer.Close(); err != nil {
-		b.Errorf("error closing form writer: %s", err)
-	}
-	req, _ := http.NewRequest("POST", "", body)
-	req.Header.Add("Content-Type", writer.FormDataContentType())
-	w := httptest.NewRecorder()
-	uploadHandle.ServeHTTP(w, req)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		// temporary (i hope) hack to solve "http: MultipartReader called twice" error
+		b.StopTimer()
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile("file", "vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+		if err != nil {
+			b.Errorf("error FormFile: %s", err)
+		}
+		if _, err := io.Copy(part, sampleDeb); err != nil {
+			b.Errorf("error copying sampleDeb to FormFile: %s", err)
+		}
+		if err := writer.Close(); err != nil {
+			b.Errorf("error closing form writer: %s", err)
+		}
+		req, _ := http.NewRequest("POST", "/upload", body)
+		req.Header.Add("Content-Type", writer.FormDataContentType())
+		w := httptest.NewRecorder()
+		b.StartTimer()
 		uploadHandle.ServeHTTP(w, req)
 	}
 	b.StopTimer()
