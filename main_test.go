@@ -88,7 +88,7 @@ func TestCreateDirs(t *testing.T) {
 	}
 	log.Println("creating temp dirs in ", config.RootRepoPath)
 	dirSuccess := createDirs(*config)
-	if !dirSuccess {
+	if err := dirSuccess; err != nil {
 		t.Errorf("createDirs() failed ")
 	}
 	for _, archDir := range config.SupportArch {

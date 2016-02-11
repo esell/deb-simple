@@ -58,8 +58,9 @@ func main() {
 		log.Fatal("unable to marshal config file, exiting...")
 	}
 
-	if !createDirs(parsedConfig) {
-		log.Fatal("error creating directory structure, exiting")
+	if err := createDirs(parsedConfig); err != nil {
+		log.Println(err)
+		log.Fatalf("error creating directory structure, exiting")
 	}
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
 	http.Handle("/upload", uploadHandler(parsedConfig))
@@ -73,30 +74,27 @@ func main() {
 	}
 }
 
-func createDirs(config Conf) bool {
+func createDirs(config Conf) error {
 	for _, arch := range config.SupportArch {
 		if _, err := os.Stat(config.ArchPath(arch)); err != nil {
 			if os.IsNotExist(err) {
 				log.Printf("Directory for %s does not exist, creating", arch)
 				dirErr := os.MkdirAll(config.ArchPath(arch), 0755)
 				if dirErr != nil {
-					log.Printf("error creating directory for %s: %s\n", arch, dirErr)
-					return false
+					return fmt.Errorf("error creating directory for %s: %s", arch, dirErr)
 				}
 			} else {
-				log.Printf("error inspecting %s: %s\n", arch, err)
-				return false
+				return fmt.Errorf("error inspecting %s: %s", arch, err)
 			}
 		}
 	}
-	return true
+	return nil
 }
 
-func inspectPackage(filename string) string {
+func inspectPackage(filename string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
-		log.Printf("error opening package file %s: %s\n", filename, err)
-		return ""
+		return "", fmt.Errorf("error opening package file %s: %s", filename, err)
 	}
 
 	arReader := ar.NewReader(f)
@@ -111,8 +109,7 @@ func inspectPackage(filename string) string {
 		}
 
 		if err != nil {
-			log.Println("error in inspectPackage loop: ", err)
-			return ""
+			return "", fmt.Errorf("error in inspectPackage loop: %s", err)
 		}
 
 		if header.Name == "control.tar.gz" {
@@ -122,14 +119,13 @@ func inspectPackage(filename string) string {
 		}
 
 	}
-	return ""
+	return "", nil
 }
 
-func inspectPackageControl(filename bytes.Buffer) string {
+func inspectPackageControl(filename bytes.Buffer) (string, error) {
 	gzf, err := gzip.NewReader(bytes.NewReader(filename.Bytes()))
 	if err != nil {
-		log.Println("error creating gzip reader: ", err)
-		return ""
+		return "", fmt.Errorf("error creating gzip reader: %s", err)
 	}
 
 	tarReader := tar.NewReader(gzf)
@@ -142,8 +138,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 		}
 
 		if err != nil {
-			log.Println("error in inspectPackage loop: ", err)
-			return ""
+			return "", fmt.Errorf("failed to inpect package: %s", err)
 		}
 
 		name := header.Name
@@ -154,7 +149,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 		case tar.TypeReg:
 			if name == "./control" {
 				io.Copy(&controlBuf, tarReader)
-				return controlBuf.String()
+				return controlBuf.String(), nil
 			}
 		default:
 			log.Printf("%s : %c %s %s\n",
@@ -165,7 +160,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 			)
 		}
 	}
-	return ""
+	return "", nil
 }
 
 func createPackagesGz(config Conf, arch string) error {
@@ -186,7 +181,10 @@ func createPackagesGz(config Conf, arch string) error {
 		if strings.HasSuffix(debFile.Name(), "deb") {
 			var packBuf bytes.Buffer
 			debPath := filepath.Join(config.ArchPath(arch), debFile.Name())
-			tempCtlData := inspectPackage(debPath)
+			tempCtlData, err := inspectPackage(debPath)
+			if err != nil {
+				return err
+			}
 			packBuf.WriteString(tempCtlData)
 			dir := filepath.Join("dists/stable/main/binary-"+arch, debFile.Name())
 			fmt.Fprintf(&packBuf, "Filename: %s\n", dir)
