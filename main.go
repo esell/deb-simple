@@ -41,9 +41,11 @@ type DeleteObj struct {
 	Arch     string
 }
 
-var mutex sync.Mutex
-var configFile = flag.String("c", "conf.json", "config file location")
-var parsedConfig = &Conf{}
+var (
+	mutex        sync.Mutex
+	configFile   = flag.String("c", "conf.json", "config file location")
+	parsedConfig = Conf{}
+)
 
 func main() {
 	flag.Parse()
@@ -56,12 +58,12 @@ func main() {
 		log.Fatal("unable to marshal config file, exiting...")
 	}
 
-	if !createDirs(*parsedConfig) {
+	if !createDirs(parsedConfig) {
 		log.Fatal("error creating directory structure, exiting")
 	}
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
-	http.Handle("/upload", uploadHandler(*parsedConfig))
-	http.Handle("/delete", deleteHandler(*parsedConfig))
+	http.Handle("/upload", uploadHandler(parsedConfig))
+	http.Handle("/delete", deleteHandler(parsedConfig))
 	if parsedConfig.EnableSSL {
 		log.Println("running with SSL enabled")
 		log.Fatal(http.ListenAndServeTLS(":"+parsedConfig.ListenPort, parsedConfig.SSLCert, parsedConfig.SSLKey, nil))
@@ -166,7 +168,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 	return ""
 }
 
-func createPackagesGz(config *Conf, arch string) error {
+func createPackagesGz(config Conf, arch string) error {
 	outfile, err := os.Create(filepath.Join(config.ArchPath(arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
@@ -269,7 +271,7 @@ func uploadHandler(config Conf) http.Handler {
 		log.Println("grabbing lock...")
 		mutex.Lock()
 		log.Println("got lock, updating package list...")
-		createPkgRes := createPackagesGz(&config, archType)
+		createPkgRes := createPackagesGz(config, archType)
 		if err := createPkgRes; err != nil {
 			log.Println("error: ", err)
 		}
@@ -298,7 +300,7 @@ func deleteHandler(config Conf) http.Handler {
 		log.Println("grabbing lock...")
 		mutex.Lock()
 		log.Println("got lock, updating package list...")
-		if err := createPackagesGz(&config, toDelete.Arch); err != nil {
+		if err := createPackagesGz(config, toDelete.Arch); err != nil {
 			httpErrorf(w, "failed to create package: %s", err)
 			return
 		}
