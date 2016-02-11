@@ -38,6 +38,12 @@ Or delete an existing file:
 
 `curl -XDELETE 'http://localhost:9090/delete' -d '{"filename":"myapp.deb","arch":"amd64"}'`
 
+To use your new repo you will have to add a line like this to your sources.list file:
+
+`deb http://my-hostname:listenPort/ stable main`
+
+`my-hostname` should be the actual hostname/IP where you are running deb-simple and `listenPort` will be whatever you set in the config. By default deb-simple puts everything into the `stable` distro and `main` section. If you have enabled SSL you will want to swap `http` for `https`.
+
 
 #License:
 
