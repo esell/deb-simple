@@ -270,12 +270,14 @@ func uploadHandler(config Conf) http.Handler {
 
 		log.Println("grabbing lock...")
 		mutex.Lock()
+		defer mutex.Unlock()
+
 		log.Println("got lock, updating package list...")
 		createPkgRes := createPackagesGz(config, archType)
 		if err := createPkgRes; err != nil {
-			log.Println("error: ", err)
+			httpErrorf(w, "error creating package: %s", err)
+			return
 		}
-		mutex.Unlock()
 		log.Println("lock returned")
 		w.WriteHeader(http.StatusOK)
 	})
@@ -299,12 +301,13 @@ func deleteHandler(config Conf) http.Handler {
 		}
 		log.Println("grabbing lock...")
 		mutex.Lock()
+		defer mutex.Unlock()
+
 		log.Println("got lock, updating package list...")
 		if err := createPackagesGz(config, toDelete.Arch); err != nil {
 			httpErrorf(w, "failed to create package: %s", err)
 			return
 		}
-		mutex.Unlock()
 		log.Println("lock returned")
 	})
 }
