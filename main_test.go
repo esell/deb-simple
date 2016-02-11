@@ -106,7 +106,10 @@ func TestCreateDirs(t *testing.T) {
 }
 
 func TestInspectPackage(t *testing.T) {
-	parsedControl := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	parsedControl, err := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	if err != nil {
+		t.Error(err)
+	}
 	if parsedControl != goodOutput {
 		t.Errorf("control file does not match")
 	}
@@ -120,7 +123,10 @@ func TestInspectPackageControl(t *testing.T) {
 	var controlBuf bytes.Buffer
 	cfReader := bytes.NewReader(sampleDeb)
 	io.Copy(&controlBuf, cfReader)
-	parsedControl := inspectPackageControl(controlBuf)
+	parsedControl, err := inspectPackageControl(controlBuf)
+	if err != nil {
+		t.Error(err)
+	}
 	if parsedControl != goodOutput {
 		t.Errorf("control file does not match")
 	}
@@ -159,7 +165,7 @@ func TestCreatePackagesGz(t *testing.T) {
 			t.Errorf("error saving copy of deb: ", err)
 		}
 	}
-	if err := createPackagesGz(config, "cats"); err != nil {
+	if err := createPackagesGz(*config, "cats"); err != nil {
 		t.Errorf("error creating packages gzip for cats")
 	}
 	pkgGzip, err := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
