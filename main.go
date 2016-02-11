@@ -138,7 +138,7 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 		}
 
 		if err != nil {
-			return "", fmt.Errorf("failed to inpect package: %s", err)
+			return "", fmt.Errorf("failed to inspect package: %s", err)
 		}
 
 		name := header.Name
