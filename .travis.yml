@@ -6,3 +6,4 @@ go:
 script:
   - go get github.com/blakesmith/ar 
   - go test -v ./...
+  - go test -run=XXX -bench=.
