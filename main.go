@@ -53,7 +53,6 @@ func main() {
 	if err != nil {
 		log.Fatal("unable to read config file, exiting...")
 	}
-	//config = &Conf{}
 	if err := json.Unmarshal(file, &parsedConfig); err != nil {
 		log.Fatal("unable to marshal config file, exiting...")
 	}
@@ -242,15 +241,11 @@ func uploadHandler(config Conf) http.Handler {
 		for {
 			part, err := reader.NextPart()
 			if err == io.EOF {
-				log.Println("breaking")
 				break
 			}
-			log.Println("form part: ", part.FormName())
 			if part.FileName() == "" {
 				continue
 			}
-			log.Println("found file: ", part.FileName())
-			log.Println("creating files: ", part.FileName())
 			dst, err := os.Create(filepath.Join(config.ArchPath(archType), part.FileName()))
 			if err != nil {
 				httpErrorf(w, "error creating deb file: %s", err)
@@ -262,8 +257,6 @@ func uploadHandler(config Conf) http.Handler {
 				return
 			}
 		}
-
-		log.Println("grabbing lock...")
 		mutex.Lock()
 		defer mutex.Unlock()
 
@@ -272,7 +265,6 @@ func uploadHandler(config Conf) http.Handler {
 			httpErrorf(w, "error creating package: %s", err)
 			return
 		}
-		log.Println("lock returned")
 		w.WriteHeader(http.StatusOK)
 	})
 }
@@ -293,7 +285,6 @@ func deleteHandler(config Conf) http.Handler {
 			httpErrorf(w, "failed to delete: %s", err)
 			return
 		}
-		log.Println("grabbing lock...")
 		mutex.Lock()
 		defer mutex.Unlock()
 
@@ -302,7 +293,6 @@ func deleteHandler(config Conf) http.Handler {
 			httpErrorf(w, "failed to create package: %s", err)
 			return
 		}
-		log.Println("lock returned")
 	})
 }
 
