@@ -101,7 +101,7 @@ func TestCreateDirs(t *testing.T) {
 
 	// cleanup
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
-		t.Errorf("error cleaning up after createDirs(): ", err)
+		t.Errorf("error cleaning up after createDirs(): %s", err)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestCreatePackagesGz(t *testing.T) {
 	// copy sample deb to repo location (assuming it exists)
 	origDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
-		t.Errorf("error opening up sample deb: ", err)
+		t.Errorf("error opening up sample deb: %s", err)
 	}
 	defer origDeb.Close()
 	for _, archDir := range config.SupportArch {
@@ -157,12 +157,12 @@ func TestCreatePackagesGz(t *testing.T) {
 		}
 		copyDeb, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archDir + "/test.deb")
 		if err != nil {
-			t.Errorf("error creating copy of deb: ", err)
+			t.Errorf("error creating copy of deb: %s", err)
 		}
 		_, err = io.Copy(copyDeb, origDeb)
 		err = copyDeb.Close()
 		if err != nil {
-			t.Errorf("error saving copy of deb: ", err)
+			t.Errorf("error saving copy of deb: %s", err)
 		}
 	}
 	if err := createPackagesGz(*config, "cats"); err != nil {
@@ -170,11 +170,11 @@ func TestCreatePackagesGz(t *testing.T) {
 	}
 	pkgGzip, err := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
 	if err != nil {
-		t.Errorf("error reading Packages.gz: ", err)
+		t.Errorf("error reading Packages.gz: %s", err)
 	}
 	pkgReader, err := gzip.NewReader(bytes.NewReader(pkgGzip))
 	if err != nil {
-		t.Errorf("error reading existing Packages.gz: ", err)
+		t.Errorf("error reading existing Packages.gz: %s", err)
 	}
 	buf := bytes.NewBuffer(nil)
 	io.Copy(buf, pkgReader)
@@ -184,7 +184,7 @@ func TestCreatePackagesGz(t *testing.T) {
 
 	// cleanup
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
-		t.Errorf("error cleaning up after createPackagesGz(): ", err)
+		t.Errorf("error cleaning up after createPackagesGz(): %s", err)
 	}
 
 }
@@ -256,7 +256,7 @@ func TestUploadHandler(t *testing.T) {
 
 	// cleanup
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
-		t.Errorf("error cleaning up after uploadHandler(): ", err)
+		t.Errorf("error cleaning up after uploadHandler(): %s", err)
 	}
 }
 
