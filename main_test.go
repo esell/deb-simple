@@ -204,8 +204,8 @@ func TestUploadHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "", nil)
 	w := httptest.NewRecorder()
 	uploadHandle.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("uploadHandler GET returned %v, should be %v", w.Code, http.StatusOK)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("uploadHandler GET returned %v, should be %v", w.Code, http.StatusMethodNotAllowed)
 	}
 
 	// POST

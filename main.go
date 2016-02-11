@@ -227,7 +227,7 @@ func createPackagesGz(config Conf, arch string) error {
 func uploadHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
-			log.Println("not a POST")
+			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
 		}
 		archType := r.URL.Query().Get("arch")
@@ -280,7 +280,7 @@ func uploadHandler(config Conf) http.Handler {
 func deleteHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
-			log.Println("not a DELETE")
+			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
 		}
 		var toDelete DeleteObj
