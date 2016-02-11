@@ -41,9 +41,11 @@ type DeleteObj struct {
 	Arch     string
 }
 
-var mutex sync.Mutex
-var configFile = flag.String("c", "conf.json", "config file location")
-var parsedConfig = &Conf{}
+var (
+	mutex        sync.Mutex
+	configFile   = flag.String("c", "conf.json", "config file location")
+	parsedConfig = Conf{}
+)
 
 func main() {
 	flag.Parse()
@@ -56,12 +58,15 @@ func main() {
 		log.Fatal("unable to marshal config file, exiting...")
 	}
 
-	if !createDirs(*parsedConfig) {
-		log.Fatal("error creating directory structure, exiting")
+	if err := createDirs(parsedConfig); err != nil {
+		log.Println(err)
+		log.Fatalf("error creating directory structure, exiting")
 	}
+
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
-	http.Handle("/upload", uploadHandler(*parsedConfig))
-	http.Handle("/delete", deleteHandler(*parsedConfig))
+	http.Handle("/upload", uploadHandler(parsedConfig))
+	http.Handle("/delete", deleteHandler(parsedConfig))
+
 	if parsedConfig.EnableSSL {
 		log.Println("running with SSL enabled")
 		log.Fatal(http.ListenAndServeTLS(":"+parsedConfig.ListenPort, parsedConfig.SSLCert, parsedConfig.SSLKey, nil))
@@ -71,30 +76,26 @@ func main() {
 	}
 }
 
-func createDirs(config Conf) bool {
+func createDirs(config Conf) error {
 	for _, arch := range config.SupportArch {
 		if _, err := os.Stat(config.ArchPath(arch)); err != nil {
 			if os.IsNotExist(err) {
 				log.Printf("Directory for %s does not exist, creating", arch)
-				dirErr := os.MkdirAll(config.ArchPath(arch), 0755)
-				if dirErr != nil {
-					log.Printf("error creating directory for %s: %s\n", arch, dirErr)
-					return false
+				if err := os.MkdirAll(config.ArchPath(arch), 0755); err != nil {
+					return fmt.Errorf("error creating directory for %s: %s", arch, err)
 				}
 			} else {
-				log.Printf("error inspecting %s: %s\n", arch, err)
-				return false
+				return fmt.Errorf("error inspecting %s: %s", arch, err)
 			}
 		}
 	}
-	return true
+	return nil
 }
 
-func inspectPackage(filename string) string {
+func inspectPackage(filename string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
-		log.Printf("error opening package file %s: %s\n", filename, err)
-		return ""
+		return "", fmt.Errorf("error opening package file %s: %s", filename, err)
 	}
 
 	arReader := ar.NewReader(f)
@@ -109,25 +110,22 @@ func inspectPackage(filename string) string {
 		}
 
 		if err != nil {
-			log.Println("error in inspectPackage loop: ", err)
-			return ""
+			return "", fmt.Errorf("error in inspectPackage loop: %s", err)
 		}
 
 		if header.Name == "control.tar.gz" {
 			io.Copy(&controlBuf, arReader)
 			return inspectPackageControl(controlBuf)
-
 		}
 
 	}
-	return ""
+	return "", nil
 }
 
-func inspectPackageControl(filename bytes.Buffer) string {
+func inspectPackageControl(filename bytes.Buffer) (string, error) {
 	gzf, err := gzip.NewReader(bytes.NewReader(filename.Bytes()))
 	if err != nil {
-		log.Println("error creating gzip reader: ", err)
-		return ""
+		return "", fmt.Errorf("error creating gzip reader: %s", err)
 	}
 
 	tarReader := tar.NewReader(gzf)
@@ -140,8 +138,7 @@ func inspectPackageControl(filename bytes.Buffer) string {
 		}
 
 		if err != nil {
-			log.Println("error in inspectPackage loop: ", err)
-			return ""
+			return "", fmt.Errorf("failed to inpect package: %s", err)
 		}
 
 		name := header.Name
@@ -152,21 +149,19 @@ func inspectPackageControl(filename bytes.Buffer) string {
 		case tar.TypeReg:
 			if name == "./control" {
 				io.Copy(&controlBuf, tarReader)
-				return controlBuf.String()
+				return controlBuf.String(), nil
 			}
 		default:
-			log.Printf("%s : %c %s %s\n",
-				"Unable to figure out type",
-				header.Typeflag,
-				"in file",
-				name,
+			log.Printf(
+				"Unable to figure out type : %c in file %s\n",
+				header.Typeflag, name,
 			)
 		}
 	}
-	return ""
+	return "", nil
 }
 
-func createPackagesGz(config *Conf, arch string) error {
+func createPackagesGz(config Conf, arch string) error {
 	outfile, err := os.Create(filepath.Join(config.ArchPath(arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
@@ -184,7 +179,10 @@ func createPackagesGz(config *Conf, arch string) error {
 		if strings.HasSuffix(debFile.Name(), "deb") {
 			var packBuf bytes.Buffer
 			debPath := filepath.Join(config.ArchPath(arch), debFile.Name())
-			tempCtlData := inspectPackage(debPath)
+			tempCtlData, err := inspectPackage(debPath)
+			if err != nil {
+				return err
+			}
 			packBuf.WriteString(tempCtlData)
 			dir := filepath.Join("dists/stable/main/binary-"+arch, debFile.Name())
 			fmt.Fprintf(&packBuf, "Filename: %s\n", dir)
@@ -229,13 +227,12 @@ func createPackagesGz(config *Conf, arch string) error {
 func uploadHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
-			log.Println("not a POST")
+			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
 		}
-		queryVals := r.URL.Query()
-		archType := "all"
-		if queryVals.Get("arch") != "" {
-			archType = queryVals.Get("arch")
+		archType := r.URL.Query().Get("arch")
+		if archType == "" {
+			archType = "all"
 		}
 		reader, err := r.MultipartReader()
 		if err != nil {
@@ -268,12 +265,13 @@ func uploadHandler(config Conf) http.Handler {
 
 		log.Println("grabbing lock...")
 		mutex.Lock()
+		defer mutex.Unlock()
+
 		log.Println("got lock, updating package list...")
-		createPkgRes := createPackagesGz(&config, archType)
-		if err := createPkgRes; err != nil {
-			log.Println("error: ", err)
+		if err := createPackagesGz(config, archType); err != nil {
+			httpErrorf(w, "error creating package: %s", err)
+			return
 		}
-		mutex.Unlock()
 		log.Println("lock returned")
 		w.WriteHeader(http.StatusOK)
 	})
@@ -282,7 +280,7 @@ func uploadHandler(config Conf) http.Handler {
 func deleteHandler(config Conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
-			log.Println("not a DELETE")
+			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
 		}
 		var toDelete DeleteObj
@@ -297,12 +295,13 @@ func deleteHandler(config Conf) http.Handler {
 		}
 		log.Println("grabbing lock...")
 		mutex.Lock()
+		defer mutex.Unlock()
+
 		log.Println("got lock, updating package list...")
-		if err := createPackagesGz(&config, toDelete.Arch); err != nil {
+		if err := createPackagesGz(config, toDelete.Arch); err != nil {
 			httpErrorf(w, "failed to create package: %s", err)
 			return
 		}
-		mutex.Unlock()
 		log.Println("lock returned")
 	})
 }
