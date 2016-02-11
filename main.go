@@ -62,9 +62,11 @@ func main() {
 		log.Println(err)
 		log.Fatalf("error creating directory structure, exiting")
 	}
+
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
 	http.Handle("/upload", uploadHandler(parsedConfig))
 	http.Handle("/delete", deleteHandler(parsedConfig))
+
 	if parsedConfig.EnableSSL {
 		log.Println("running with SSL enabled")
 		log.Fatal(http.ListenAndServeTLS(":"+parsedConfig.ListenPort, parsedConfig.SSLCert, parsedConfig.SSLKey, nil))
@@ -79,9 +81,8 @@ func createDirs(config Conf) error {
 		if _, err := os.Stat(config.ArchPath(arch)); err != nil {
 			if os.IsNotExist(err) {
 				log.Printf("Directory for %s does not exist, creating", arch)
-				dirErr := os.MkdirAll(config.ArchPath(arch), 0755)
-				if dirErr != nil {
-					return fmt.Errorf("error creating directory for %s: %s", arch, dirErr)
+				if err := os.MkdirAll(config.ArchPath(arch), 0755); err != nil {
+					return fmt.Errorf("error creating directory for %s: %s", arch, err)
 				}
 			} else {
 				return fmt.Errorf("error inspecting %s: %s", arch, err)
@@ -115,7 +116,6 @@ func inspectPackage(filename string) (string, error) {
 		if header.Name == "control.tar.gz" {
 			io.Copy(&controlBuf, arReader)
 			return inspectPackageControl(controlBuf)
-
 		}
 
 	}
@@ -152,11 +152,9 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 				return controlBuf.String(), nil
 			}
 		default:
-			log.Printf("%s : %c %s %s\n",
-				"Unable to figure out type",
-				header.Typeflag,
-				"in file",
-				name,
+			log.Printf(
+				"Unable to figure out type : %c in file %s\n",
+				header.Typeflag, name,
 			)
 		}
 	}
@@ -232,10 +230,9 @@ func uploadHandler(config Conf) http.Handler {
 			log.Println("not a POST")
 			return
 		}
-		queryVals := r.URL.Query()
-		archType := "all"
-		if queryVals.Get("arch") != "" {
-			archType = queryVals.Get("arch")
+		archType := r.URL.Query().Get("arch")
+		if archType == "" {
+			archType = "all"
 		}
 		reader, err := r.MultipartReader()
 		if err != nil {
@@ -271,8 +268,7 @@ func uploadHandler(config Conf) http.Handler {
 		defer mutex.Unlock()
 
 		log.Println("got lock, updating package list...")
-		createPkgRes := createPackagesGz(config, archType)
-		if err := createPkgRes; err != nil {
+		if err := createPackagesGz(config, archType); err != nil {
 			httpErrorf(w, "error creating package: %s", err)
 			return
 		}
