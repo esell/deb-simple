@@ -80,13 +80,13 @@ func TestCreateDirs(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
 	}
 	t.Log("creating temp dirs in ", config.RootRepoPath)
-	dirSuccess := createDirs(*config)
+	dirSuccess := createDirs(config)
 	if err := dirSuccess; err != nil {
 		t.Errorf("createDirs() failed ")
 	}
@@ -137,7 +137,7 @@ func TestCreatePackagesGz(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -164,7 +164,7 @@ func TestCreatePackagesGz(t *testing.T) {
 			t.Errorf("error saving copy of deb: %s", err)
 		}
 	}
-	if err := createPackagesGz(*config, "cats"); err != nil {
+	if err := createPackagesGz(config, "cats"); err != nil {
 		t.Errorf("error creating packages gzip for cats")
 	}
 	pkgGzip, err := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
@@ -193,12 +193,12 @@ func TestUploadHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
 	}
-	uploadHandle := uploadHandler(*config)
+	uploadHandle := uploadHandler(config)
 	// GET
 	req, _ := http.NewRequest("GET", "", nil)
 	w := httptest.NewRecorder()
