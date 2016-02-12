@@ -86,8 +86,7 @@ func TestCreateDirs(t *testing.T) {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
 	}
 	t.Log("creating temp dirs in ", config.RootRepoPath)
-	dirSuccess := createDirs(config)
-	if err := dirSuccess; err != nil {
+	if err := createDirs(config); err != nil {
 		t.Errorf("createDirs() failed ")
 	}
 	for _, archDir := range config.SupportArch {
@@ -102,15 +101,37 @@ func TestCreateDirs(t *testing.T) {
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
 		t.Errorf("error cleaning up after createDirs(): %s", err)
 	}
+
+	// create temp file
+	tempFile, err := os.Create(pwd + "/tempFile")
+	if err != nil {
+		t.Fatalf("create %s: %s", pwd+"/tempFile", err)
+	}
+	defer tempFile.Close()
+	config.RootRepoPath = pwd + "/tempFile"
+	// Can't make directory named after file.
+	if err := createDirs(config); err == nil {
+		t.Errorf("createDirs() should have failed but did not")
+	}
+	// cleanup
+	if err := os.RemoveAll(pwd + "/tempFile"); err != nil {
+		t.Errorf("error cleaning up after createDirs(): %s", err)
+	}
+
 }
 
 func TestInspectPackage(t *testing.T) {
 	parsedControl, err := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
-		t.Error(err)
+		t.Error("inspectPackage() error: %s", err)
 	}
 	if parsedControl != goodOutput {
 		t.Errorf("control file does not match")
+	}
+
+	_, err = inspectPackage("thisfileshouldnotexist")
+	if err == nil {
+		t.Error("inspectPackage() should have failed, it did not")
 	}
 }
 
@@ -124,10 +145,16 @@ func TestInspectPackageControl(t *testing.T) {
 	io.Copy(&controlBuf, cfReader)
 	parsedControl, err := inspectPackageControl(controlBuf)
 	if err != nil {
-		t.Error(err)
+		t.Error("error inspecting control file: %s", err)
 	}
 	if parsedControl != goodOutput {
 		t.Errorf("control file does not match")
+	}
+
+	var failControlBuf bytes.Buffer
+	_, err = inspectPackageControl(failControlBuf)
+	if err == nil {
+		t.Error("inspectPackageControl() should have failed, it did not")
 	}
 
 }
@@ -150,17 +177,18 @@ func TestCreatePackagesGz(t *testing.T) {
 	defer origDeb.Close()
 	for _, archDir := range config.SupportArch {
 		// do not use the built-in createDirs() in case it is broken
-		dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-"+archDir, 0755)
-		if dirErr != nil {
-			t.Errorf("error creating directory for %s: %s\n", archDir, dirErr)
+		if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-"+archDir, 0755); err != nil {
+			t.Errorf("error creating directory for %s: %s\n", archDir, err)
 		}
 		copyDeb, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-" + archDir + "/test.deb")
 		if err != nil {
 			t.Errorf("error creating copy of deb: %s", err)
 		}
 		_, err = io.Copy(copyDeb, origDeb)
-		err = copyDeb.Close()
 		if err != nil {
+			t.Errorf("error writing copy of deb: %s", err)
+		}
+		if err := copyDeb.Close(); err != nil {
 			t.Errorf("error saving copy of deb: %s", err)
 		}
 	}
@@ -186,6 +214,22 @@ func TestCreatePackagesGz(t *testing.T) {
 		t.Errorf("error cleaning up after createPackagesGz(): %s", err)
 	}
 
+	// create temp file
+	tempFile, err := os.Create(pwd + "/tempFile")
+	if err != nil {
+		t.Fatalf("create %s: %s", pwd+"/tempFile", err)
+	}
+	defer tempFile.Close()
+	config.RootRepoPath = pwd + "/tempFile"
+	// Can't make directory named after file
+	if err := createPackagesGz(config, "cats"); err == nil {
+		t.Errorf("createPackagesGz() should have failed, it did not")
+	}
+	// cleanup
+	if err := os.RemoveAll(pwd + "/tempFile"); err != nil {
+		t.Errorf("error cleaning up after createDirs(): %s", err)
+	}
+
 }
 
 func TestUploadHandler(t *testing.T) {
@@ -209,9 +253,8 @@ func TestUploadHandler(t *testing.T) {
 
 	// POST
 	// create "all" arch as it's the default
-	dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755)
-	if dirErr != nil {
-		t.Error("error creating directory for POST testing")
+	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
+		t.Error("error creating directory for POST testing: %s", err)
 	}
 	sampleDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
@@ -228,8 +271,7 @@ func TestUploadHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("error copying sampleDeb to FormFile: %s", err)
 	}
-	err = writer.Close()
-	if err != nil {
+	if err := writer.Close(); err != nil {
 		t.Errorf("error closing form writer: %s", err)
 	}
 	req, _ = http.NewRequest("POST", "", body)
@@ -257,6 +299,102 @@ func TestUploadHandler(t *testing.T) {
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
 		t.Errorf("error cleaning up after uploadHandler(): %s", err)
 	}
+
+	// create temp file
+	tempFile, err := os.Create(pwd + "/tempFile")
+	if err != nil {
+		t.Fatalf("create %s: %s", pwd+"/tempFile", err)
+	}
+	defer tempFile.Close()
+	config.RootRepoPath = pwd + "/tempFile"
+	// Can't make directory named after file
+	uploadHandle = uploadHandler(config)
+	failBody := &bytes.Buffer{}
+	failWriter := multipart.NewWriter(failBody)
+	failPart, err := failWriter.CreateFormFile("file", "vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	if err != nil {
+		t.Errorf("error FormFile: %s", err)
+	}
+	_, err = io.Copy(failPart, sampleDeb)
+	if err != nil {
+		t.Errorf("error copying sampleDeb to FormFile: %s", err)
+	}
+	if err := failWriter.Close(); err != nil {
+		t.Errorf("error closing form writer: %s", err)
+	}
+	req, _ = http.NewRequest("POST", "", failBody)
+	req.Header.Add("Content-Type", failWriter.FormDataContentType())
+	w = httptest.NewRecorder()
+	uploadHandle.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("uploadHandler POST returned %v, should be %v", w.Code, http.StatusInternalServerError)
+	}
+	// cleanup
+	if err := os.RemoveAll(pwd + "/tempFile"); err != nil {
+		t.Errorf("error cleaning up after createDirs(): %s", err)
+	}
+}
+
+func TestDeleteHandler(t *testing.T) {
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("Unable to get current working directory: %s", err)
+	}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	// sanity check...
+	if config.RootRepoPath != pwd+"/testing" {
+		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
+	}
+	deleteHandle := deleteHandler(config)
+	// GET
+	req, _ := http.NewRequest("GET", "", nil)
+	w := httptest.NewRecorder()
+	deleteHandle.ServeHTTP(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("deleteHandler GET returned %v, should be %v", w.Code, http.StatusMethodNotAllowed)
+	}
+
+	// DELETE
+	// create "all" arch as it's the default
+	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
+		t.Error("error creating directory for POST testing: %s", err)
+	}
+	tempDeb, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-all/myapp.deb")
+	if err != nil {
+		t.Fatalf("create %s: %s", config.RootRepoPath+"/dists/stable/main/binary-all/myapp.deb", err)
+	}
+	defer tempDeb.Close()
+	req, _ = http.NewRequest("DELETE", "", bytes.NewBufferString("{\"filename\":\"myapp.deb\",\"arch\":\"all\"}"))
+	w = httptest.NewRecorder()
+	deleteHandle.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("deleteHandler DELETE returned %v, should be %v", w.Code, http.StatusOK)
+	}
+
+	// cleanup
+	if err := os.RemoveAll(config.RootRepoPath); err != nil {
+		t.Errorf("error cleaning up after uploadHandler(): %s", err)
+	}
+
+	// create temp file
+	tempFile, err := os.Create(pwd + "/tempFile")
+	if err != nil {
+		t.Fatalf("create %s: %s", pwd+"/tempFile", err)
+	}
+	defer tempFile.Close()
+	config.RootRepoPath = pwd + "/tempFile"
+	// Can't make directory named after file
+	deleteHandle = deleteHandler(config)
+	req, _ = http.NewRequest("DELETE", "", bytes.NewBufferString("{\"filename\":\"myapp.deb\",\"arch\":\"amd64\"}"))
+	w = httptest.NewRecorder()
+	deleteHandle.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("uploadHandler POST returned %v, should be %v", w.Code, http.StatusInternalServerError)
+	}
+	// cleanup
+	if err := os.RemoveAll(pwd + "/tempFile"); err != nil {
+		t.Errorf("error cleaning up after createDirs(): %s", err)
+	}
 }
 
 func BenchmarkUploadHandler(b *testing.B) {
@@ -270,9 +408,8 @@ func BenchmarkUploadHandler(b *testing.B) {
 		b.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
 	}
 	uploadHandle := uploadHandler(*config)
-	dirErr := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755)
-	if dirErr != nil {
-		b.Errorf("error creating directory for POST testing")
+	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
+		b.Errorf("error creating directory for POST testing: %s", err)
 	}
 	sampleDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
