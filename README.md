@@ -34,7 +34,7 @@ Install using `go get`. Fill out the conf.json file with the values you want, it
 
 Once it is running POST a file to the `/upload` endpoint:
 
-`curl -XPOST 'http://localhost:9090/upload?arch=amd64&distroName=stable' -F "file=@myapp.deb"`
+`curl -XPOST 'http://localhost:9090/upload?arch=amd64&distro=stable' -F "file=@myapp.deb"`
 
 Or delete an existing file:
 

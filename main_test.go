@@ -432,7 +432,7 @@ func BenchmarkUploadHandler(b *testing.B) {
 		if err := writer.Close(); err != nil {
 			b.Errorf("error closing form writer: %s", err)
 		}
-		req, _ := http.NewRequest("POST", "/upload", body)
+		req, _ := http.NewRequest("POST", "/upload?distro=stable", body)
 		req.Header.Add("Content-Type", writer.FormDataContentType())
 		w := httptest.NewRecorder()
 		b.StartTimer()
