@@ -2,6 +2,7 @@
 	"listenPort" : "9090",
 	"rootRepoPath" : "/opt/repo",
 	"supportedArch" : ["all","i386","amd64"],
+        "distroNames":["stable"],
 	"enableSSL" : true,
 	"SSLcert" : "server.crt",
 	"SSLkey" : "server.key"

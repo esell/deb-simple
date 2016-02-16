@@ -34,11 +34,11 @@ Install using `go get`. Fill out the conf.json file with the values you want, it
 
 Once it is running POST a file to the `/upload` endpoint:
 
-`curl -XPOST 'http://localhost:9090/upload?arch=amd64' -F "file=@myapp.deb"`
+`curl -XPOST 'http://localhost:9090/upload?arch=amd64&distroName=stable' -F "file=@myapp.deb"`
 
 Or delete an existing file:
 
-`curl -XDELETE 'http://localhost:9090/delete' -d '{"filename":"myapp.deb","arch":"amd64"}'`
+`curl -XDELETE 'http://localhost:9090/delete' -d '{"filename":"myapp.deb","distroName":"stable","arch":"amd64"}'`
 
 To use your new repo you will have to add a line like this to your sources.list file:
 

@@ -80,7 +80,7 @@ func TestCreateDirs(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -164,7 +164,7 @@ func TestCreatePackagesGz(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -192,7 +192,7 @@ func TestCreatePackagesGz(t *testing.T) {
 			t.Errorf("error saving copy of deb: %s", err)
 		}
 	}
-	if err := createPackagesGz(config, "cats"); err != nil {
+	if err := createPackagesGz(config, "stable", "cats"); err != nil {
 		t.Errorf("error creating packages gzip for cats")
 	}
 	pkgGzip, err := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
@@ -222,7 +222,7 @@ func TestCreatePackagesGz(t *testing.T) {
 	defer tempFile.Close()
 	config.RootRepoPath = pwd + "/tempFile"
 	// Can't make directory named after file
-	if err := createPackagesGz(config, "cats"); err == nil {
+	if err := createPackagesGz(config, "stable", "cats"); err == nil {
 		t.Errorf("createPackagesGz() should have failed, it did not")
 	}
 	// cleanup
@@ -237,7 +237,7 @@ func TestUploadHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -340,7 +340,7 @@ func TestDeleteHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -364,7 +364,7 @@ func TestDeleteHandler(t *testing.T) {
 		t.Fatalf("create %s: %s", config.RootRepoPath+"/dists/stable/main/binary-all/myapp.deb", err)
 	}
 	defer tempDeb.Close()
-	req, _ = http.NewRequest("DELETE", "", bytes.NewBufferString("{\"filename\":\"myapp.deb\",\"arch\":\"all\"}"))
+	req, _ = http.NewRequest("DELETE", "", bytes.NewBufferString("{\"filename\":\"myapp.deb\",\"arch\":\"all\", \"distroName\":\"stable\"}"))
 	w = httptest.NewRecorder()
 	deleteHandle.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -385,11 +385,11 @@ func TestDeleteHandler(t *testing.T) {
 	config.RootRepoPath = pwd + "/tempFile"
 	// Can't make directory named after file
 	deleteHandle = deleteHandler(config)
-	req, _ = http.NewRequest("DELETE", "", bytes.NewBufferString("{\"filename\":\"myapp.deb\",\"arch\":\"amd64\"}"))
+	req, _ = http.NewRequest("DELETE", "", bytes.NewBufferString("{\"filename\":\"myapp.deb\",\"arch\":\"amd64\", \"distroName\":\"stable\"}"))
 	w = httptest.NewRecorder()
 	deleteHandle.ServeHTTP(w, req)
 	if w.Code != http.StatusInternalServerError {
-		t.Errorf("uploadHandler POST returned %v, should be %v", w.Code, http.StatusInternalServerError)
+		t.Errorf("deleteHandler DELETE returned %v, should be %v", w.Code, http.StatusInternalServerError)
 	}
 	// cleanup
 	if err := os.RemoveAll(pwd + "/tempFile"); err != nil {
@@ -402,7 +402,7 @@ func BenchmarkUploadHandler(b *testing.B) {
 	if err != nil {
 		b.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, EnableSSL: false}
+	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		b.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
