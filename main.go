@@ -34,7 +34,7 @@ type Conf struct {
 }
 
 func (c Conf) ArchPath(distro, arch string) string {
-	return filepath.Join(c.RootRepoPath, "/dists/"+distro+"/main/binary-"+arch)
+	return filepath.Join(c.RootRepoPath, "dists", distro, "main/binary-"+arch)
 }
 
 type DeleteObj struct {
@@ -82,12 +82,12 @@ func createDirs(config Conf) error {
 		for _, arch := range config.SupportArch {
 			if _, err := os.Stat(config.ArchPath(distro, arch)); err != nil {
 				if os.IsNotExist(err) {
-					log.Printf("Directory for %s does not exist, creating", arch)
+					log.Printf("Directory for %s (%s) does not exist, creating", distro, arch)
 					if err := os.MkdirAll(config.ArchPath(distro, arch), 0755); err != nil {
-						return fmt.Errorf("error creating directory for %s: %s", arch, err)
+						return fmt.Errorf("error creating directory for %s (%s): %s", distro, arch, err)
 					}
 				} else {
-					return fmt.Errorf("error inspecting %s: %s", arch, err)
+					return fmt.Errorf("error inspecting %s (%s): %s", distro, arch, err)
 				}
 			}
 		}
@@ -234,10 +234,10 @@ func uploadHandler(config Conf) http.Handler {
 			return
 		}
 		archType := r.URL.Query().Get("arch")
-		distroName := r.URL.Query().Get("distro")
 		if archType == "" {
 			archType = "all"
 		}
+		distroName := r.URL.Query().Get("distro")
 		if distroName == "" {
 			distroName = "stable"
 		}
