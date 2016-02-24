@@ -164,7 +164,7 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 	return "", nil
 }
 
-func createPackagesGz(config Conf, distro string, arch string) error {
+func createPackagesGz(config Conf, distro, arch string) error {
 	outfile, err := os.Create(filepath.Join(config.ArchPath(distro, arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
