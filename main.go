@@ -164,7 +164,7 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 	return "", nil
 }
 
-func createPackagesGz(config Conf, distro, arch string) error {
+func createPackagesGz(config Conf, distro string, arch string) error {
 	outfile, err := os.Create(filepath.Join(config.ArchPath(distro, arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
@@ -187,7 +187,7 @@ func createPackagesGz(config Conf, distro, arch string) error {
 				return err
 			}
 			packBuf.WriteString(tempCtlData)
-			dir := filepath.Join("dists/stable/main/binary-"+arch, debFile.Name())
+			dir := filepath.Join("dists", distro, "main/binary-"+arch, debFile.Name())
 			fmt.Fprintf(&packBuf, "Filename: %s\n", dir)
 			fmt.Fprintf(&packBuf, "Size: %d\n", debFile.Size())
 			f, err := os.Open(debPath)
