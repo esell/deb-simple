@@ -1,0 +1,11 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/blakesmith/ar",
+			"repository": "https://github.com/blakesmith/ar",
+			"revision": "8bd4349a67f2533b078dbc524689d15dba0f4659",
+			"branch": "master"
+		}
+	]
+}
