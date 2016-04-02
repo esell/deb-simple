@@ -8,5 +8,5 @@ before_install:
   - go get github.com/constabulary/gb/...
   - if ! go get github.com/golang/tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
 script:
-  - $HOME/gopath/bin/goveralls -service=travis-ci
-  - gb test -v
+  - cd $TRAVIS_BUILD_DIR/src/github.com/esell/deb-simple && $HOME/gopath/bin/goveralls -service=travis-ci
+  - cd $TRAVIS_BUILD_DIR && gb test -v
