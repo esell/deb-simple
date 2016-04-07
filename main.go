@@ -178,7 +178,7 @@ func createPackagesGz(config Conf, distro, arch string) error {
 	if err != nil {
 		return fmt.Errorf("scanning: %s: %s", config.ArchPath(distro, arch), err)
 	}
-	for _, debFile := range dirList {
+	for i, debFile := range dirList {
 		if strings.HasSuffix(debFile.Name(), "deb") {
 			var packBuf bytes.Buffer
 			debPath := filepath.Join(config.ArchPath(distro, arch), debFile.Name())
@@ -217,7 +217,9 @@ func createPackagesGz(config Conf, distro, arch string) error {
 			}
 			fmt.Fprintf(&packBuf, "SHA256: %s\n",
 				hex.EncodeToString(sha256hash.Sum(nil)))
-			packBuf.WriteString("\n\n")
+			if i != (len(dirList) - 1) {
+				packBuf.WriteString("\n\n")
+			}
 			gzOut.Write(packBuf.Bytes())
 			f = nil
 		}

@@ -71,8 +71,6 @@ Size: 391240
 MD5sum: 0ec79417129746ff789fcff0976730c5
 SHA1: b2ac976af80f0f50a8336402d5a29c67a2880b9b
 SHA256: 9938ec82a8c882ebc2d59b64b0bf2ac01e9cbc5a235be4aa268d4f8484e75eab
-
-
 `
 
 var goodPkgGzOutputNonDefault = `Package: vim-tiny
@@ -105,8 +103,6 @@ Size: 391240
 MD5sum: 0ec79417129746ff789fcff0976730c5
 SHA1: b2ac976af80f0f50a8336402d5a29c67a2880b9b
 SHA256: 9938ec82a8c882ebc2d59b64b0bf2ac01e9cbc5a235be4aa268d4f8484e75eab
-
-
 `
 
 func TestCreateDirs(t *testing.T) {
@@ -240,14 +236,14 @@ func TestCreatePackagesGz(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	io.Copy(buf, pkgReader)
 	if goodPkgGzOutput != string(buf.Bytes()) {
-		t.Errorf("Packages.gz does not match, returned value is: %s", string(buf.Bytes()))
+		t.Errorf("Packages.gz does not match, returned value is:\n %s \n\n should be:\n %s", string(buf.Bytes()), goodPkgGzOutput)
 	}
 
 	// cleanup
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
 		t.Errorf("error cleaning up after createPackagesGz(): %s", err)
 	}
-    
+
 	// create temp file
 	tempFile, err := os.Create(pwd + "/tempFile")
 	if err != nil {
@@ -320,7 +316,7 @@ func TestCreatePackagesGzNonDefault(t *testing.T) {
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
 		t.Errorf("error cleaning up after createPackagesGz(): %s", err)
 	}
-    
+
 }
 
 func TestUploadHandler(t *testing.T) {
