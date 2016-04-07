@@ -152,7 +152,7 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 		case tar.TypeReg:
 			if name == "./control" {
 				io.Copy(&controlBuf, tarReader)
-				return controlBuf.String(), nil
+				return strings.TrimRight(controlBuf.String(), "\n") + "\n", nil
 			}
 		default:
 			log.Printf(
