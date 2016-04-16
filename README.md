@@ -30,7 +30,11 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 
 # Usage:
 
-Install using `go get`. Fill out the conf.json file with the values you want, it should be pretty self-explanatory, then fire it up!
+You'll need [GB](https://getgb.io/) to build so install that first. Clone this repo and then do a `gb build` from inside of it, your executable will be in `bin/`. 
+
+If you do not want to build from source you can just download a pre-built binary from the Releases section.
+
+Fill out the conf.json file with the values you want, it should be pretty self-explanatory, then fire it up!
 
 Once it is running POST a file to the `/upload` endpoint:
 

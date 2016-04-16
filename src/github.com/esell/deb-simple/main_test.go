@@ -7,11 +7,14 @@ import (
 	"encoding/hex"
 	"io"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 var goodOutput = `Package: vim-tiny
@@ -114,6 +117,10 @@ func TestCreateDirs(t *testing.T) {
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
+	}
+	mywatcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal("error creating fswatcher: ", err)
 	}
 	t.Log("creating temp dirs in ", config.RootRepoPath)
 	if err := createDirs(config); err != nil {

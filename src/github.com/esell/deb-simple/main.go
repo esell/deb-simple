@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/blakesmith/ar"
+	"github.com/fsnotify/fsnotify"
 )
 
 type Conf struct {
@@ -47,6 +48,7 @@ var (
 	mutex        sync.Mutex
 	configFile   = flag.String("c", "conf.json", "config file location")
 	parsedConfig = Conf{}
+	mywatcher    *fsnotify.Watcher
 )
 
 func main() {
@@ -59,10 +61,39 @@ func main() {
 		log.Fatal("unable to marshal config file, exiting...")
 	}
 
+	// fire up filesystem watcher
+	mywatcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal("error creating fswatcher: ", err)
+	}
+
 	if err := createDirs(parsedConfig); err != nil {
 		log.Println(err)
 		log.Fatalf("error creating directory structure, exiting")
 	}
+
+	go func() {
+		for {
+			select {
+			case event := <-mywatcher.Events:
+				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Create == fsnotify.Create) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
+					log.Println("modified file:", event.Name)
+					mutex.Lock()
+
+					log.Println("got lock, updating package list...")
+					distroArch := destructPath(event.Name)
+					if filepath.Base(event.Name) != "Packages.gz" {
+						if err := createPackagesGz(parsedConfig, distroArch[0], distroArch[1]); err != nil {
+							log.Println("error creating package: %s", err)
+						}
+					}
+					mutex.Unlock()
+				}
+			case err := <-mywatcher.Errors:
+				log.Println("error:", err)
+			}
+		}
+	}()
 
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
 	http.Handle("/upload", uploadHandler(parsedConfig))
@@ -77,6 +108,14 @@ func main() {
 	}
 }
 
+func destructPath(filePath string) []string {
+	splitPath := strings.Split(filePath, "/")
+	archFull := splitPath[len(splitPath)-2]
+	archSplit := strings.Split(archFull, "-")
+	distro := splitPath[len(splitPath)-4]
+	return []string{distro, archSplit[1]}
+}
+
 func createDirs(config Conf) error {
 	for _, distro := range config.DistroNames {
 		for _, arch := range config.SupportArch {
@@ -86,9 +125,19 @@ func createDirs(config Conf) error {
 					if err := os.MkdirAll(config.ArchPath(distro, arch), 0755); err != nil {
 						return fmt.Errorf("error creating directory for %s (%s): %s", distro, arch, err)
 					}
+					//log.Println("starting watcher for ", config.ArchPath(distro, arch))
+					//err := mywatcher.Add(config.ArchPath(distro, arch))
+					//if err != nil {
+					//	return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
+					//}
 				} else {
 					return fmt.Errorf("error inspecting %s (%s): %s", distro, arch, err)
 				}
+			}
+			log.Println("starting watcher for ", config.ArchPath(distro, arch))
+			err := mywatcher.Add(config.ArchPath(distro, arch))
+			if err != nil {
+				return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
 			}
 		}
 	}
@@ -267,14 +316,6 @@ func uploadHandler(config Conf) http.Handler {
 				return
 			}
 		}
-		mutex.Lock()
-		defer mutex.Unlock()
-
-		log.Println("got lock, updating package list...")
-		if err := createPackagesGz(config, distroName, archType); err != nil {
-			httpErrorf(w, "error creating package: %s", err)
-			return
-		}
 		w.WriteHeader(http.StatusOK)
 	})
 }
@@ -293,14 +334,6 @@ func deleteHandler(config Conf) http.Handler {
 		debPath := filepath.Join(config.ArchPath(toDelete.DistroName, toDelete.Arch), toDelete.Filename)
 		if err := os.Remove(debPath); err != nil {
 			httpErrorf(w, "failed to delete: %s", err)
-			return
-		}
-		mutex.Lock()
-		defer mutex.Unlock()
-
-		log.Println("got lock, updating package list...")
-		if err := createPackagesGz(config, toDelete.DistroName, toDelete.Arch); err != nil {
-			httpErrorf(w, "failed to create package: %s", err)
 			return
 		}
 	})

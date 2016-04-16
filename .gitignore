@@ -1,4 +1,5 @@
-deb-simple
 repo/
 conf.json
 *.pprof
+pkg/
+bin/
