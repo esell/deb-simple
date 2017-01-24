@@ -30,7 +30,7 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 
 # Usage:
 
-You'll need [GB](https://getgb.io/) to build so install that first. Clone this repo and then do a `gb build` from inside of it, your executable will be in `bin/`. 
+__This project is now using the native Go vendoring feature so you will need to build with Go >1.7 or if using 1.5/1.6 you will need to make sure `GO15VENDOREXPERIMENT` is set to `1`.__
 
 If you do not want to build from source you can just download a pre-built binary from the Releases section.
 
