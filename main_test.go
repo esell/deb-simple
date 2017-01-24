@@ -113,7 +113,7 @@ func TestCreateDirs(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -201,7 +201,7 @@ func TestCreatePackagesGz(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -274,7 +274,7 @@ func TestCreatePackagesGzNonDefault(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"blah"}, EnableSSL: false}
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"blah"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -331,7 +331,7 @@ func TestUploadHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -434,7 +434,7 @@ func TestDeleteHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
@@ -496,7 +496,7 @@ func BenchmarkUploadHandler(b *testing.B) {
 	if err != nil {
 		b.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := &Conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
+	config := &conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, EnableSSL: false}
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		b.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")

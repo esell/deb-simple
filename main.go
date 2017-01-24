@@ -24,7 +24,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-type Conf struct {
+type conf struct {
 	ListenPort   string   `json:"listenPort"`
 	RootRepoPath string   `json:"rootRepoPath"`
 	SupportArch  []string `json:"supportedArch"`
@@ -34,11 +34,11 @@ type Conf struct {
 	SSLKey       string   `json:"SSLkey"`
 }
 
-func (c Conf) ArchPath(distro, arch string) string {
+func (c conf) ArchPath(distro, arch string) string {
 	return filepath.Join(c.RootRepoPath, "dists", distro, "main/binary-"+arch)
 }
 
-type DeleteObj struct {
+type deleteObj struct {
 	Filename   string
 	DistroName string
 	Arch       string
@@ -47,7 +47,7 @@ type DeleteObj struct {
 var (
 	mutex        sync.Mutex
 	configFile   = flag.String("c", "conf.json", "config file location")
-	parsedConfig = Conf{}
+	parsedconfig = conf{}
 	mywatcher    *fsnotify.Watcher
 )
 
@@ -57,7 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatal("unable to read config file, exiting...")
 	}
-	if err := json.Unmarshal(file, &parsedConfig); err != nil {
+	if err := json.Unmarshal(file, &parsedconfig); err != nil {
 		log.Fatal("unable to marshal config file, exiting...")
 	}
 
@@ -67,7 +67,7 @@ func main() {
 		log.Fatal("error creating fswatcher: ", err)
 	}
 
-	if err := createDirs(parsedConfig); err != nil {
+	if err := createDirs(parsedconfig); err != nil {
 		log.Println(err)
 		log.Fatalf("error creating directory structure, exiting")
 	}
@@ -83,7 +83,7 @@ func main() {
 					log.Println("got lock, updating package list...")
 					distroArch := destructPath(event.Name)
 					if filepath.Base(event.Name) != "Packages.gz" {
-						if err := createPackagesGz(parsedConfig, distroArch[0], distroArch[1]); err != nil {
+						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1]); err != nil {
 							log.Println("error creating package: %s", err)
 						}
 					}
@@ -95,16 +95,16 @@ func main() {
 		}
 	}()
 
-	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedConfig.RootRepoPath))))
-	http.Handle("/upload", uploadHandler(parsedConfig))
-	http.Handle("/delete", deleteHandler(parsedConfig))
+	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedconfig.RootRepoPath))))
+	http.Handle("/upload", uploadHandler(parsedconfig))
+	http.Handle("/delete", deleteHandler(parsedconfig))
 
-	if parsedConfig.EnableSSL {
+	if parsedconfig.EnableSSL {
 		log.Println("running with SSL enabled")
-		log.Fatal(http.ListenAndServeTLS(":"+parsedConfig.ListenPort, parsedConfig.SSLCert, parsedConfig.SSLKey, nil))
+		log.Fatal(http.ListenAndServeTLS(":"+parsedconfig.ListenPort, parsedconfig.SSLCert, parsedconfig.SSLKey, nil))
 	} else {
 		log.Println("running without SSL enabled")
-		log.Fatal(http.ListenAndServe(":"+parsedConfig.ListenPort, nil))
+		log.Fatal(http.ListenAndServe(":"+parsedconfig.ListenPort, nil))
 	}
 }
 
@@ -116,7 +116,7 @@ func destructPath(filePath string) []string {
 	return []string{distro, archSplit[1]}
 }
 
-func createDirs(config Conf) error {
+func createDirs(config conf) error {
 	for _, distro := range config.DistroNames {
 		for _, arch := range config.SupportArch {
 			if _, err := os.Stat(config.ArchPath(distro, arch)); err != nil {
@@ -213,7 +213,7 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 	return "", nil
 }
 
-func createPackagesGz(config Conf, distro, arch string) error {
+func createPackagesGz(config conf, distro, arch string) error {
 	outfile, err := os.Create(filepath.Join(config.ArchPath(distro, arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
@@ -278,7 +278,7 @@ func createPackagesGz(config Conf, distro, arch string) error {
 	return nil
 }
 
-func uploadHandler(config Conf) http.Handler {
+func uploadHandler(config conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
@@ -320,13 +320,13 @@ func uploadHandler(config Conf) http.Handler {
 	})
 }
 
-func deleteHandler(config Conf) http.Handler {
+func deleteHandler(config conf) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
 			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
 		}
-		var toDelete DeleteObj
+		var toDelete deleteObj
 		if err := json.NewDecoder(r.Body).Decode(&toDelete); err != nil {
 			httpErrorf(w, "failed to decode json: %s", err)
 			return
