@@ -38,17 +38,17 @@ Fill out the conf.json file with the values you want, it should be pretty self-e
 
 Once it is running POST a file to the `/upload` endpoint:
 
-`curl -XPOST 'http://localhost:9090/upload?arch=amd64&distro=stable' -F "file=@myapp.deb"`
+`curl -XPOST 'http://localhost:9090/upload?arch=amd64&distro=stable&section=main' -F "file=@myapp.deb"`
 
 Or delete an existing file:
 
-`curl -XDELETE 'http://localhost:9090/delete' -d '{"filename":"myapp.deb","distroName":"stable","arch":"amd64"}'`
+`curl -XDELETE 'http://localhost:9090/delete' -d '{"filename":"myapp.deb","distroName":"stable","arch":"amd64", "section":"main"}'`
 
 To use your new repo you will have to add a line like this to your sources.list file:
 
 `deb http://my-hostname:listenPort/ stable main`
 
-`my-hostname` should be the actual hostname/IP where you are running deb-simple and `listenPort` will be whatever you set in the config. By default deb-simple puts everything into the `stable` distro and `main` section. If you have enabled SSL you will want to swap `http` for `https`.
+`my-hostname` should be the actual hostname/IP where you are running deb-simple and `listenPort` will be whatever you set in the config. By default deb-simple puts everything into the `stable` distro and `main` section but these can be changed in the config. If you have enabled SSL you will want to swap `http` for `https`.
 
 
 #License:
