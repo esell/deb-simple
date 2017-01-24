@@ -28,20 +28,22 @@ type conf struct {
 	ListenPort   string   `json:"listenPort"`
 	RootRepoPath string   `json:"rootRepoPath"`
 	SupportArch  []string `json:"supportedArch"`
+	Sections     []string `json:"sections"`
 	DistroNames  []string `json:"distroNames"`
 	EnableSSL    bool     `json:"enableSSL"`
 	SSLCert      string   `json:"SSLcert"`
 	SSLKey       string   `json:"SSLkey"`
 }
 
-func (c conf) ArchPath(distro, arch string) string {
-	return filepath.Join(c.RootRepoPath, "dists", distro, "main/binary-"+arch)
+func (c conf) ArchPath(distro, section, arch string) string {
+	return filepath.Join(c.RootRepoPath, "dists", distro, section, "binary-"+arch)
 }
 
 type deleteObj struct {
 	Filename   string
 	DistroName string
 	Arch       string
+	Section    string
 }
 
 var (
@@ -81,9 +83,11 @@ func main() {
 					mutex.Lock()
 
 					log.Println("got lock, updating package list...")
+					log.Println("Event: ", event)
 					distroArch := destructPath(event.Name)
 					if filepath.Base(event.Name) != "Packages.gz" {
-						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1]); err != nil {
+						log.Println("distroArch: ", distroArch)
+						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
 							log.Println("error creating package: %s", err)
 						}
 					}
@@ -113,31 +117,34 @@ func destructPath(filePath string) []string {
 	archFull := splitPath[len(splitPath)-2]
 	archSplit := strings.Split(archFull, "-")
 	distro := splitPath[len(splitPath)-4]
-	return []string{distro, archSplit[1]}
+	section := splitPath[len(splitPath)-3]
+	return []string{distro, section, archSplit[1]}
 }
 
 func createDirs(config conf) error {
 	for _, distro := range config.DistroNames {
 		for _, arch := range config.SupportArch {
-			if _, err := os.Stat(config.ArchPath(distro, arch)); err != nil {
-				if os.IsNotExist(err) {
-					log.Printf("Directory for %s (%s) does not exist, creating", distro, arch)
-					if err := os.MkdirAll(config.ArchPath(distro, arch), 0755); err != nil {
-						return fmt.Errorf("error creating directory for %s (%s): %s", distro, arch, err)
+			for _, section := range config.Sections {
+				if _, err := os.Stat(config.ArchPath(distro, section, arch)); err != nil {
+					if os.IsNotExist(err) {
+						log.Printf("Directory for %s (%s) does not exist, creating", distro, arch)
+						if err := os.MkdirAll(config.ArchPath(distro, section, arch), 0755); err != nil {
+							return fmt.Errorf("error creating directory for %s (%s): %s", distro, arch, err)
+						}
+						//log.Println("starting watcher for ", config.ArchPath(distro, section, arch))
+						//err := mywatcher.Add(config.ArchPath(distro, section, arch))
+						//if err != nil {
+						//	return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
+						//}
+					} else {
+						return fmt.Errorf("error inspecting %s (%s): %s", distro, arch, err)
 					}
-					//log.Println("starting watcher for ", config.ArchPath(distro, arch))
-					//err := mywatcher.Add(config.ArchPath(distro, arch))
-					//if err != nil {
-					//	return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
-					//}
-				} else {
-					return fmt.Errorf("error inspecting %s (%s): %s", distro, arch, err)
 				}
-			}
-			log.Println("starting watcher for ", config.ArchPath(distro, arch))
-			err := mywatcher.Add(config.ArchPath(distro, arch))
-			if err != nil {
-				return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
+				log.Println("starting watcher for ", config.ArchPath(distro, section, arch))
+				err := mywatcher.Add(config.ArchPath(distro, section, arch))
+				if err != nil {
+					return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
+				}
 			}
 		}
 	}
@@ -213,8 +220,8 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 	return "", nil
 }
 
-func createPackagesGz(config conf, distro, arch string) error {
-	outfile, err := os.Create(filepath.Join(config.ArchPath(distro, arch), "Packages.gz"))
+func createPackagesGz(config conf, distro, section, arch string) error {
+	outfile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
 	}
@@ -223,20 +230,20 @@ func createPackagesGz(config conf, distro, arch string) error {
 	defer gzOut.Close()
 	// loop through each directory
 	// run inspectPackage
-	dirList, err := ioutil.ReadDir(config.ArchPath(distro, arch))
+	dirList, err := ioutil.ReadDir(config.ArchPath(distro, section, arch))
 	if err != nil {
-		return fmt.Errorf("scanning: %s: %s", config.ArchPath(distro, arch), err)
+		return fmt.Errorf("scanning: %s: %s", config.ArchPath(distro, section, arch), err)
 	}
 	for i, debFile := range dirList {
 		if strings.HasSuffix(debFile.Name(), "deb") {
 			var packBuf bytes.Buffer
-			debPath := filepath.Join(config.ArchPath(distro, arch), debFile.Name())
+			debPath := filepath.Join(config.ArchPath(distro, section, arch), debFile.Name())
 			tempCtlData, err := inspectPackage(debPath)
 			if err != nil {
 				return err
 			}
 			packBuf.WriteString(tempCtlData)
-			dir := filepath.Join("dists", distro, "main/binary-"+arch, debFile.Name())
+			dir := filepath.Join("dists", distro, section, "binary-"+arch, debFile.Name())
 			fmt.Fprintf(&packBuf, "Filename: %s\n", dir)
 			fmt.Fprintf(&packBuf, "Size: %d\n", debFile.Size())
 			f, err := os.Open(debPath)
@@ -292,6 +299,10 @@ func uploadHandler(config conf) http.Handler {
 		if distroName == "" {
 			distroName = "stable"
 		}
+		section := r.URL.Query().Get("section")
+		if section == "" {
+			section = "main"
+		}
 		reader, err := r.MultipartReader()
 		if err != nil {
 			httpErrorf(w, "error creating multipart reader: %s", err)
@@ -305,7 +316,7 @@ func uploadHandler(config conf) http.Handler {
 			if part.FileName() == "" {
 				continue
 			}
-			dst, err := os.Create(filepath.Join(config.ArchPath(distroName, archType), part.FileName()))
+			dst, err := os.Create(filepath.Join(config.ArchPath(distroName, section, archType), part.FileName()))
 			if err != nil {
 				httpErrorf(w, "error creating deb file: %s", err)
 				return
@@ -331,7 +342,7 @@ func deleteHandler(config conf) http.Handler {
 			httpErrorf(w, "failed to decode json: %s", err)
 			return
 		}
-		debPath := filepath.Join(config.ArchPath(toDelete.DistroName, toDelete.Arch), toDelete.Filename)
+		debPath := filepath.Join(config.ArchPath(toDelete.DistroName, toDelete.Section, toDelete.Arch), toDelete.Filename)
 		if err := os.Remove(debPath); err != nil {
 			httpErrorf(w, "failed to delete: %s", err)
 			return
