@@ -1,6 +1,7 @@
 [![Build Status](https://travis-ci.org/esell/deb-simple.svg?branch=master)](https://travis-ci.org/esell/deb-simple)
 [![Coverage Status](https://coveralls.io/repos/github/esell/deb-simple/badge.svg?branch=master)](https://coveralls.io/github/esell/deb-simple?branch=master)
 
+blah
 
 # deb-simple (get it? dead simple.. deb simple...)
 
