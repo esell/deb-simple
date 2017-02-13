@@ -1,0 +1,12 @@
+pipeline:
+  build:
+    image: golang
+    commands:
+      - apt-get -y install curl
+      - export GOPATH=$PWD:$PWD/vendor
+      - go test -cover -coverprofile coverage.out
+      - GOOS=linux GOARCH=amd64 go build -o deb-simple_linux
+      - GOOS=darwin GOARCH=amd64 go build -o deb-simple_darwin
+      - GOOS=windows GOARCH=amd64 go build -o deb-simple_windows.exe
+      - curl -XPOST 'http://esheavyindustries.com:8080/upload?repo=debsimple_git' -F "file=@coverage.out"
+
