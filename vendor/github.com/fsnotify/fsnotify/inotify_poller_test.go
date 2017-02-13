@@ -7,17 +7,16 @@
 package fsnotify
 
 import (
+	"syscall"
 	"testing"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 type testFd [2]int
 
 func makeTestFd(t *testing.T) testFd {
 	var tfd testFd
-	errno := unix.Pipe(tfd[:])
+	errno := syscall.Pipe(tfd[:])
 	if errno != nil {
 		t.Fatalf("Failed to create pipe: %v", errno)
 	}
@@ -29,7 +28,7 @@ func (tfd testFd) fd() int {
 }
 
 func (tfd testFd) closeWrite(t *testing.T) {
-	errno := unix.Close(tfd[1])
+	errno := syscall.Close(tfd[1])
 	if errno != nil {
 		t.Fatalf("Failed to close write end of pipe: %v", errno)
 	}
@@ -37,7 +36,7 @@ func (tfd testFd) closeWrite(t *testing.T) {
 
 func (tfd testFd) put(t *testing.T) {
 	buf := make([]byte, 10)
-	_, errno := unix.Write(tfd[1], buf)
+	_, errno := syscall.Write(tfd[1], buf)
 	if errno != nil {
 		t.Fatalf("Failed to write to pipe: %v", errno)
 	}
@@ -45,15 +44,15 @@ func (tfd testFd) put(t *testing.T) {
 
 func (tfd testFd) get(t *testing.T) {
 	buf := make([]byte, 10)
-	_, errno := unix.Read(tfd[0], buf)
+	_, errno := syscall.Read(tfd[0], buf)
 	if errno != nil {
 		t.Fatalf("Failed to read from pipe: %v", errno)
 	}
 }
 
 func (tfd testFd) close() {
-	unix.Close(tfd[1])
-	unix.Close(tfd[0])
+	syscall.Close(tfd[1])
+	syscall.Close(tfd[0])
 }
 
 func makePoller(t *testing.T) (testFd, *fdPoller) {
@@ -67,7 +66,7 @@ func makePoller(t *testing.T) (testFd, *fdPoller) {
 
 func TestPollerWithBadFd(t *testing.T) {
 	_, err := newFdPoller(-1)
-	if err != unix.EBADF {
+	if err != syscall.EBADF {
 		t.Fatalf("Expected EBADF, got: %v", err)
 	}
 }
