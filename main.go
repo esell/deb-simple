@@ -5,10 +5,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -21,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/blakesmith/ar"
+	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -49,7 +54,9 @@ type deleteObj struct {
 var (
 	mutex        sync.Mutex
 	configFile   = flag.String("c", "conf.json", "config file location")
+	generateKey  = flag.Bool("g", false, "generate an API key")
 	parsedconfig = conf{}
+	db           *bolt.DB
 	mywatcher    *fsnotify.Watcher
 )
 
@@ -61,6 +68,37 @@ func main() {
 	}
 	if err := json.Unmarshal(file, &parsedconfig); err != nil {
 		log.Fatal("unable to marshal config file, exiting...")
+	}
+
+	// open/create database for API keys
+	db, err = bolt.Open("debsimple.db", 0600, nil)
+	if err != nil {
+		log.Fatal("unable to open database: ", err)
+	}
+	defer db.Close()
+
+	// create DB bucket if needed
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("APIkeys"))
+		if err != nil {
+			//return log.Fatal("unable to create DB bucket: ", err)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatal("unable to create database bucket: ", err)
+	}
+
+	// generate API key and exit
+	if *generateKey {
+		fmt.Println("Generating API key...")
+		tempKey, err := createAPIkey()
+		if err != nil {
+			log.Fatal("unable to generate API key: ", err)
+		}
+		fmt.Println("key: ", tempKey)
+		os.Exit(0)
 	}
 
 	// fire up filesystem watcher
@@ -348,6 +386,35 @@ func deleteHandler(config conf) http.Handler {
 			return
 		}
 	})
+}
+
+func createAPIkey() (string, error) {
+	randomBytes := make([]byte, 32)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", err
+	}
+	apiKey := base64.URLEncoding.EncodeToString(randomBytes)
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("APIkeys"))
+		if b == nil {
+			return errors.New("database bucket does not exist!")
+		}
+		id, err := b.NextSequence()
+		if err != nil {
+			return err
+		}
+		idBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(idBytes, id)
+
+		err = b.Put(idBytes, []byte(apiKey))
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	return apiKey, nil
 }
 
 func httpErrorf(w http.ResponseWriter, format string, a ...interface{}) {
