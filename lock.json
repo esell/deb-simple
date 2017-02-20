@@ -1,5 +1,5 @@
 {
-    "memo": "ae3d1cdf770387fa1e80ed72c09f216d0cb346d329dfb42b7ff6ee7c7f4259e8",
+    "memo": "19679023a78b3c587b95df3c3b746899ddfbe53f4cbddc214f8b4b24856953d9",
     "projects": [
         {
             "name": "github.com/blakesmith/ar",
@@ -10,11 +10,27 @@
             ]
         },
         {
-            "name": "github.com/fsnotify/fsnotify",
-            "version": "v1.2.11",
-            "revision": "836bfd95fecc0f1511dd66bdbf2b5b61ab8b00b6",
+            "name": "github.com/boltdb/bolt",
+            "version": "v1.3.0",
+            "revision": "583e8937c61f1af6513608ccc75c97b6abdf4ff9",
             "packages": [
                 "."
+            ]
+        },
+        {
+            "name": "github.com/fsnotify/fsnotify",
+            "version": "v1.4.2",
+            "revision": "629574ca2a5df945712d3079857300b5e4da0236",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "golang.org/x/sys",
+            "branch": "master",
+            "revision": "075e574b89e4c2d22f2286a7e2b919519c6f3547",
+            "packages": [
+                "unix"
             ]
         }
     ]
