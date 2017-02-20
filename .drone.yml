@@ -3,7 +3,7 @@ pipeline:
     image: golang
     commands:
       - apt-get -y install curl
-      - export GOPATH=$PWD:$PWD/vendor
+        #- export GOPATH=$PWD:$PWD/vendor
       - go test -cover -coverprofile coverage.out
       - GOOS=linux GOARCH=amd64 go build -o deb-simple_linux
       - GOOS=darwin GOARCH=amd64 go build -o deb-simple_darwin
