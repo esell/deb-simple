@@ -1,6 +1,6 @@
 pipeline:
   build:
-    image: golang
+      image: golang:1.7.5-wheezy
     commands:
       - apt-get -y install curl
         #- export GOPATH=$PWD:$PWD/vendor
