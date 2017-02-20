@@ -1,12 +1,18 @@
 pipeline:
   build:
-      image: golang:1.7.5-wheezy
+    image: golang:1.7.5-wheezy
     commands:
       - apt-get -y install curl
-        #- export GOPATH=$PWD:$PWD/vendor
+      - echo $HOME
+      - echo $PWD
+      - go version
+      - export GOPATH=/drone/src:/drone/src/vendor
+      - cd /drone/src
+      # not sure wtf drones problem is, but it wants vendor
+      # files in $PWD/vendor/src...
+      - mkdir /drone/src/vendor/src && cp -r /drone/src/vendor/github.com /drone/src/vendor/src/ && cp -r /drone/src/vendor/golang.org /drone/src/vendor/src/
       - go test -cover -coverprofile coverage.out
       - GOOS=linux GOARCH=amd64 go build -o deb-simple_linux
       - GOOS=darwin GOARCH=amd64 go build -o deb-simple_darwin
       - GOOS=windows GOARCH=amd64 go build -o deb-simple_windows.exe
       - curl -XPOST 'http://esheavyindustries.com:8080/upload?repo=debsimple_git' -F "file=@coverage.out"
-
