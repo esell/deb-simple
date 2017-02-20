@@ -1,5 +1,5 @@
 {
-    "memo": "95197935043890d39e02ad14478f38a0c4714587339e21b3d1e4fb62e3a81699",
+    "memo": "ae3d1cdf770387fa1e80ed72c09f216d0cb346d329dfb42b7ff6ee7c7f4259e8",
     "projects": [
         {
             "name": "github.com/blakesmith/ar",
@@ -11,18 +11,10 @@
         },
         {
             "name": "github.com/fsnotify/fsnotify",
-            "version": "v1.4.2",
-            "revision": "629574ca2a5df945712d3079857300b5e4da0236",
+            "version": "v1.2.11",
+            "revision": "836bfd95fecc0f1511dd66bdbf2b5b61ab8b00b6",
             "packages": [
                 "."
-            ]
-        },
-        {
-            "name": "golang.org/x/sys",
-            "branch": "master",
-            "revision": "d75a52659825e75fff6158388dddc6a5b04f9ba5",
-            "packages": [
-                "unix"
             ]
         }
     ]

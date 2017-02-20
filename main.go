@@ -5,10 +5,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -19,20 +22,23 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/blakesmith/ar"
+	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
 )
 
 type conf struct {
-	ListenPort   string   `json:"listenPort"`
-	RootRepoPath string   `json:"rootRepoPath"`
-	SupportArch  []string `json:"supportedArch"`
-	Sections     []string `json:"sections"`
-	DistroNames  []string `json:"distroNames"`
-	EnableSSL    bool     `json:"enableSSL"`
-	SSLCert      string   `json:"SSLcert"`
-	SSLKey       string   `json:"SSLkey"`
+	ListenPort    string   `json:"listenPort"`
+	RootRepoPath  string   `json:"rootRepoPath"`
+	SupportArch   []string `json:"supportedArch"`
+	Sections      []string `json:"sections"`
+	DistroNames   []string `json:"distroNames"`
+	EnableSSL     bool     `json:"enableSSL"`
+	SSLCert       string   `json:"SSLcert"`
+	SSLKey        string   `json:"SSLkey"`
+	EnableAPIKeys bool     `json:"enableAPIKeys"`
 }
 
 func (c conf) ArchPath(distro, section, arch string) string {
@@ -49,6 +55,7 @@ type deleteObj struct {
 var (
 	mutex        sync.Mutex
 	configFile   = flag.String("c", "conf.json", "config file location")
+	generateKey  = flag.Bool("g", false, "generate an API key")
 	parsedconfig = conf{}
 	mywatcher    *fsnotify.Watcher
 )
@@ -61,6 +68,34 @@ func main() {
 	}
 	if err := json.Unmarshal(file, &parsedconfig); err != nil {
 		log.Fatal("unable to marshal config file, exiting...")
+	}
+
+	var db *bolt.DB
+	defer db.Close()
+
+	if parsedconfig.EnableAPIKeys || *generateKey {
+		db = openDB()
+		// create DB bucket if needed
+		err = db.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucketIfNotExists([]byte("APIkeys"))
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			log.Fatal("unable to create database bucket: ", err)
+		}
+	}
+	// generate API key and exit
+	if *generateKey {
+		fmt.Println("Generating API key...")
+		tempKey, err := createAPIkey(db)
+		if err != nil {
+			log.Fatal("unable to generate API key: ", err)
+		}
+		fmt.Println("key: ", tempKey)
+		os.Exit(0)
 	}
 
 	// fire up filesystem watcher
@@ -100,8 +135,8 @@ func main() {
 	}()
 
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedconfig.RootRepoPath))))
-	http.Handle("/upload", uploadHandler(parsedconfig))
-	http.Handle("/delete", deleteHandler(parsedconfig))
+	http.Handle("/upload", uploadHandler(parsedconfig, db))
+	http.Handle("/delete", deleteHandler(parsedconfig, db))
 
 	if parsedconfig.EnableSSL {
 		log.Println("running with SSL enabled")
@@ -131,11 +166,6 @@ func createDirs(config conf) error {
 						if err := os.MkdirAll(config.ArchPath(distro, section, arch), 0755); err != nil {
 							return fmt.Errorf("error creating directory for %s (%s): %s", distro, arch, err)
 						}
-						//log.Println("starting watcher for ", config.ArchPath(distro, section, arch))
-						//err := mywatcher.Add(config.ArchPath(distro, section, arch))
-						//if err != nil {
-						//	return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
-						//}
 					} else {
 						return fmt.Errorf("error inspecting %s (%s): %s", distro, arch, err)
 					}
@@ -285,11 +315,22 @@ func createPackagesGz(config conf, distro, section, arch string) error {
 	return nil
 }
 
-func uploadHandler(config conf) http.Handler {
+func uploadHandler(config conf, db *bolt.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
+		}
+		if config.EnableAPIKeys {
+			apiKey := r.URL.Query().Get("key")
+			if apiKey == "" {
+				http.Error(w, "api key not present", http.StatusUnauthorized)
+				return
+			}
+			if !validateAPIkey(db, apiKey) {
+				http.Error(w, "api key not valid", http.StatusUnauthorized)
+				return
+			}
 		}
 		archType := r.URL.Query().Get("arch")
 		if archType == "" {
@@ -331,11 +372,22 @@ func uploadHandler(config conf) http.Handler {
 	})
 }
 
-func deleteHandler(config conf) http.Handler {
+func deleteHandler(config conf, db *bolt.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
 			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
+		}
+		if config.EnableAPIKeys {
+			apiKey := r.URL.Query().Get("key")
+			if apiKey == "" {
+				http.Error(w, "api key not present", http.StatusUnauthorized)
+				return
+			}
+			if !validateAPIkey(db, apiKey) {
+				http.Error(w, "api key not valid", http.StatusUnauthorized)
+				return
+			}
 		}
 		var toDelete deleteObj
 		if err := json.NewDecoder(r.Body).Decode(&toDelete); err != nil {
@@ -348,6 +400,56 @@ func deleteHandler(config conf) http.Handler {
 			return
 		}
 	})
+}
+
+func openDB() *bolt.DB {
+	// open/create database for API keys
+	db, err := bolt.Open("debsimple.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		log.Fatal("unable to open database: ", err)
+	}
+
+	return db
+}
+
+func createAPIkey(db *bolt.DB) (string, error) {
+	randomBytes := make([]byte, 32)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", err
+	}
+	apiKey := base64.URLEncoding.EncodeToString(randomBytes)
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("APIkeys"))
+		if b == nil {
+			return errors.New("database bucket does not exist!")
+		}
+
+		err = b.Put([]byte(apiKey), []byte(apiKey))
+		return err
+	})
+	if err != nil {
+		return "", err
+	} else {
+		return apiKey, nil
+	}
+}
+
+func validateAPIkey(db *bolt.DB, key string) bool {
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("APIkeys"))
+		v := b.Get([]byte(key))
+		if len(v) == 0 {
+			return errors.New("key not found")
+		}
+		return nil
+	})
+	if err == nil {
+		return true
+	} else {
+		return false
+	}
 }
 
 func httpErrorf(w http.ResponseWriter, format string, a ...interface{}) {
