@@ -64,6 +64,12 @@ A delete would look like:
 
 `curl -XDELETE 'http://localhost:9090/delete?key=MY_BIG_API_KEY' -d '{"filename":"myapp.deb","distroName":"stable","arch":"amd64", "section":"main"}'`
 
+If you want an automatable service which builds you packages, either manualy or via CI/CD, checkout [debpkg](https://github.com/xor-gate/debpkg), 
+which makes it very easy to create complex packages with almost no work.  
+
+If you want to continuous deliver created packages to deb-simple server, it is not recommended to place the key 
+somewhere others could find it. You can use [deb-simple-cd-helper](https://github.com/paulkramme/deb-simple-cd-help),
+which allows you to place a plaintext file with the api key somewhere on your build server without the need to expose it.
 
 #License:
 
