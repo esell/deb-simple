@@ -73,4 +73,4 @@ which allows you to place a plaintext file with the api key somewhere on your bu
 
 #License:
 
-[MIT](LICENSE.txt) so go crazy. Would appreciate PRs for anything cool you add though :)
+[MIT](LICENSE.txt) so go crazy
