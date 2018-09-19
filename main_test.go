@@ -165,7 +165,7 @@ func TestCreateDirs(t *testing.T) {
 func TestInspectPackage(t *testing.T) {
 	parsedControl, err := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
-		t.Error("inspectPackage() error: %s", err)
+		t.Errorf("inspectPackage() error: %s", err)
 	}
 	if parsedControl != goodOutput {
 		t.Errorf("control file does not match")
@@ -187,7 +187,7 @@ func TestInspectPackageControl(t *testing.T) {
 	io.Copy(&controlBuf, cfReader)
 	parsedControl, err := inspectPackageControl(controlBuf)
 	if err != nil {
-		t.Error("error inspecting control file: %s", err)
+		t.Errorf("error inspecting control file: %s", err)
 	}
 	if parsedControl != goodOutput {
 		t.Errorf("control file does not match")
@@ -359,7 +359,7 @@ func TestUploadHandler(t *testing.T) {
 	// POST
 	// create "all" arch as it's the default
 	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
-		t.Error("error creating directory for POST testing: %s", err)
+		t.Errorf("error creating directory for POST testing: %s", err)
 	}
 	sampleDeb, err := os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
@@ -454,7 +454,7 @@ func TestUploadHandler(t *testing.T) {
 	uploadHandle = uploadHandler(config, db)
 	// create "all" arch as it's the default
 	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
-		t.Error("error creating directory for POST testing: %s", err)
+		t.Errorf("error creating directory for POST testing: %s", err)
 	}
 
 	sampleDeb, err = os.Open("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
@@ -541,7 +541,7 @@ func TestDeleteHandler(t *testing.T) {
 	// DELETE
 	// create "all" arch as it's the default
 	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
-		t.Error("error creating directory for POST testing: %s", err)
+		t.Errorf("error creating directory for POST testing: %s", err)
 	}
 	tempDeb, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-all/myapp.deb")
 	if err != nil {
@@ -595,7 +595,7 @@ func TestDeleteHandler(t *testing.T) {
 
 	// create "all" arch as it's the default
 	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
-		t.Error("error creating directory for POST testing: %s", err)
+		t.Errorf("error creating directory for POST testing: %s", err)
 	}
 	tempDeb, err = os.Create(config.RootRepoPath + "/dists/stable/main/binary-all/myapp.deb")
 	if err != nil {
@@ -619,7 +619,7 @@ func TestDeleteHandler(t *testing.T) {
 	}
 
 	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-all", 0755); err != nil {
-		t.Error("error creating directory for POST testing: %s", err)
+		t.Errorf("error creating directory for POST testing: %s", err)
 	}
 	tempDeb, err = os.Create(config.RootRepoPath + "/dists/stable/main/binary-all/myapp.deb")
 	if err != nil {

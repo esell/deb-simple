@@ -273,7 +273,7 @@ func createPackagesGz(config conf, distro, section, arch string) error {
 				return err
 			}
 			packBuf.WriteString(tempCtlData)
-			dir := filepath.Join("dists", distro, section, "binary-"+arch, debFile.Name())
+			dir := filepath.ToSlash(filepath.Join("dists", distro, section, "binary-"+arch, debFile.Name()))
 			fmt.Fprintf(&packBuf, "Filename: %s\n", dir)
 			fmt.Fprintf(&packBuf, "Size: %d\n", debFile.Size())
 			f, err := os.Open(debPath)
