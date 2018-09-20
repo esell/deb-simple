@@ -27,6 +27,8 @@ import (
 	"github.com/blakesmith/ar"
 	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
+	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/clearsign"
 )
 
 type conf struct {
@@ -127,7 +129,9 @@ func main() {
 						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
 							log.Printf("error creating package: %s", err)
 						}
-						createRelease(parsedconfig, distroArch[0])
+						if parsedconfig.EnableSigning {
+							createRelease(parsedconfig, distroArch[0])
+						}
 					}
 					mutex.Unlock()
 				}
@@ -396,8 +400,39 @@ func createRelease(config conf, distro string) error {
 	outfile.WriteString("SHA256:\n")
 	outfile.WriteString(sha256Sums.String())
 
+	signRelease(outfile.Name())
+
 	return nil
 }
+
+func signRelease(filename string) error {
+
+	workingDirectory := filepath.Dir(filename)
+
+	releaseFile, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("Error opening Release file: %s", err)
+	}
+
+	entity, err := openpgp.NewEntity("Package Guy", "I Make-a da packages", "test@emgial.com", nil)
+	releaseGpg, err := os.Create(filepath.Join(workingDirectory, "Release.gpg"))
+	defer releaseGpg.Close()
+
+	err = openpgp.ArmoredDetachSign(releaseGpg, entity, releaseFile, nil)
+	if err != nil {
+		return fmt.Errorf("Error signing release file: %s", err)
+	}
+
+	releaseFile.Seek(0,0)
+
+	inlineRelease, err := os.Create(filepath.Join(workingDirectory, "InRelease"))
+	writer, err := clearsign.Encode(inlineRelease, entity.PrivateKey, nil)
+	io.Copy(writer, releaseFile)
+	writer.Close()
+	
+	return nil
+}
+
 func uploadHandler(config conf, db *bolt.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
