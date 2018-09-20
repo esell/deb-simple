@@ -114,16 +114,12 @@ func main() {
 			select {
 			case event := <-mywatcher.Events:
 				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Create == fsnotify.Create) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
-					log.Println("modified file:", event.Name)
 					mutex.Lock()
-
-					log.Println("got lock, updating package list...")
-					log.Println("Event: ", event)
-					distroArch := destructPath(event.Name)
 					if filepath.Base(event.Name) != "Packages.gz" {
-						log.Println("distroArch: ", distroArch)
+						log.Println("Event: ", event)
+						distroArch := destructPath(event.Name)
 						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
-							log.Println("error creating package: %s", err)
+							log.Printf("error creating package: %s", err)
 						}
 					}
 					mutex.Unlock()
