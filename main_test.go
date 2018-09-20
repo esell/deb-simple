@@ -17,6 +17,9 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
+	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/packet"
+	"golang.org/x/crypto/openpgp/armor"
 )
 
 var goodOutput = `Package: vim-tiny
@@ -361,7 +364,146 @@ func TestCreateRelease(t *testing.T) {
 		t.Errorf("error cleaning up after createRelease(): %s", err)
 	}
 }
+
+func TestCreateKey(t *testing.T) {
+	pwd, _ := os.Getwd()
+
+	if err := os.MkdirAll("testing", 0755); err != nil {
+		t.Errorf("error creating directory: %s\n", err)
 	}
+
+	createKeyHandler(pwd + "/testing", "deb-simple Test", "deb-simple@go.go")
+
+	privateKey, err := os.Stat("testing/private.key")
+	if os.IsNotExist(err) {
+		t.Errorf("Private key was not saved correctly: %s", err)
+	}
+
+	if privateKey.Size() < 3000 {
+		t.Error("Private key was too small")
+	}
+
+	if err := os.Remove("testing/private.key"); err != nil {
+		t.Errorf("error cleaning up private key: %s", err)
+	}
+
+	publicKey, err := os.Stat("testing/public.key")
+	if os.IsNotExist(err) {
+		t.Errorf("Public key was not saved correctly: %s", err)
+	}
+
+	if publicKey.Size() < 1500 {
+		t.Error("Public key was too small")
+	}
+
+	if err := os.Remove("testing/public.key"); err != nil {
+		t.Errorf("error cleaning up public key: %s", err)
+	}
+}
+
+func TestSignRelease(t *testing.T) {
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("Unable to get current working directory: %s", err)
+	}
+
+	createKeyHandler(pwd + "/testing", "deb-simple Test", "deb-simple@go.go")
+
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats"}, DistroNames: []string{"stable"}, Sections: []string{"main"}, EnableSSL: false, EnableSigning: true, PrivateKey: pwd + "/testing/private.key"}
+
+	origPackages, err := os.Open("samples/Packages.gz")
+	if err != nil {
+		t.Errorf("error opening up sample packages: %s", err)
+	}
+	// do not use the built-in createDirs() in case it is broken
+	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-cats", 0755); err != nil {
+		t.Errorf("error creating directory: %s\n", err)
+	}
+	copyPackages, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
+	defer copyPackages.Close()
+	if err != nil {
+		t.Errorf("error creating copy of package file: %s", err)
+	}
+	_, err = io.Copy(copyPackages, origPackages)
+	if err != nil {
+		t.Errorf("error writing copy of package file: %s", err)
+	}
+
+	if err := createRelease(config, "stable"); err != nil {
+		t.Errorf("error creating Releases file: %s", err)
+	}
+
+	gpgSig, err := os.Stat(config.RootRepoPath + "/dists/stable/Release.gpg")
+	if os.IsNotExist(err) {
+		t.Errorf("GPG Signature was not saved correctly: %s", err)
+	}
+
+	if gpgSig.Size() < 400 {
+		t.Error("GPG Signature was too small")
+	}
+
+	signedRelease, err := os.Stat(config.RootRepoPath + "/dists/stable/InRelease")
+	if os.IsNotExist(err) {
+		t.Errorf("Signed Release file was not saved correctly: %s", err)
+	}
+
+	if signedRelease.Size() < 800 {
+		t.Error("Signed release was too small")
+	}
+
+	signature,_ := os.Open(config.RootRepoPath + "/dists/stable/Release.gpg")
+	message,_ := os.Open(config.RootRepoPath + "/dists/stable/Release")
+	block, _ := armor.Decode(signature)
+	reader := packet.NewReader(block.Body)
+	pkt, _ := reader.Next()
+	sig, _ := pkt.(*packet.Signature)
+	hash := sig.Hash.New()
+	io.Copy(hash, message)
+
+	entity := createEntityFromPublicKey(pwd + "/testing/public.key")
+
+	err = entity.PrimaryKey.VerifySignature(hash, sig)
+	if err != nil {
+		t.Errorf("Could not verify Release file: %s", err)
+	}
+
+	if err := os.RemoveAll(config.RootRepoPath); err != nil {
+		t.Errorf("error cleaning up after createRelease(): %s", err)
+	}
+}
+
+func createEntityFromPublicKey(publicKeyPath string) (*openpgp.Entity) {
+
+	publicKeyData, err := os.Open(publicKeyPath)
+	defer publicKeyData.Close()
+
+	if err != nil {
+		log.Fatalf("Error opening public key file %s: %s", publicKeyPath, err);
+	}
+
+	block, err := armor.Decode(publicKeyData)
+
+	if block.Type != openpgp.PublicKeyType {
+		log.Fatalf("Invalid public key type %s", block.Type)
+	}
+
+	reader := packet.NewReader(block.Body)
+	pkt, err := reader.Next()
+
+	if err != nil {
+		log.Fatalf("Error reading public key data: %s", err)
+	}
+
+	publicKey, ok := pkt.(*packet.PublicKey)
+	if !ok {
+		log.Fatalf("Error parsing public key")
+	}
+
+	e := openpgp.Entity{
+		PrimaryKey: publicKey,
+	}
+
+	return &e
 }
 
 func TestCreatePackagesGzNonDefault(t *testing.T) {
