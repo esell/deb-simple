@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
@@ -107,6 +108,22 @@ Size: 391240
 MD5sum: 0ec79417129746ff789fcff0976730c5
 SHA1: b2ac976af80f0f50a8336402d5a29c67a2880b9b
 SHA256: 9938ec82a8c882ebc2d59b64b0bf2ac01e9cbc5a235be4aa268d4f8484e75eab
+`
+
+var goodReleaseOutput = `Suite: stable
+Codename: stable
+Components: main blah
+Architectures: cats dogs
+Date: Thu, 20 Sep 2018 14:17:21 UTC
+MD5Sum:
+ 40fb9665d0d186102bad50191484910f 1307 main/binary-cats/Packages
+ 5f05d1302a6a356198b2d2ffffa7933d 820 main/binary-cats/Packages.gz
+SHA1:
+ fc08372f4853c4d958216399bcdba492cb21d72f 1307 main/binary-cats/Packages
+ d352275a13b69f2a67c7c6616a02ee00d7d7d591 820 main/binary-cats/Packages.gz
+SHA256:
+ ef0a50955545e01dd2dae7ee67e75e59c6be8e2b4f106085528c9386b5dcb62e 1307 main/binary-cats/Packages
+ 97fe74cd7c19dc0f37726466af800909c9802a468ec1db4528a624ea0901547d 820 main/binary-cats/Packages.gz
 `
 
 func TestCreateDirs(t *testing.T) {
@@ -251,6 +268,14 @@ func TestCreatePackagesGz(t *testing.T) {
 		t.Errorf("Packages.gz does not match, returned value is:\n %s \n\n should be:\n %s", string(buf.Bytes()), goodPkgGzOutput)
 	}
 
+	pkgFile, err := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages")
+	if err != nil {
+		t.Errorf("error reading Packages: %s", err)
+	}
+	if goodPkgGzOutput != string(pkgFile) {
+		t.Errorf("Packages does not match, returned value is:\n %s \n\n should be:\n %s", string(buf.Bytes()), goodPkgGzOutput)
+	}
+
 	// cleanup
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
 		t.Errorf("error cleaning up after createPackagesGz(): %s", err)
@@ -271,7 +296,72 @@ func TestCreatePackagesGz(t *testing.T) {
 	if err := os.RemoveAll(pwd + "/tempFile"); err != nil {
 		t.Errorf("error cleaning up after createDirs(): %s", err)
 	}
+}
 
+func TestCreateRelease(t *testing.T) {
+
+	Now = func() time.Time {
+		return time.Date(2018, 9, 20, 14, 17, 21, 000000000, time.UTC)
+	}
+
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("Unable to get current working directory: %s", err)
+	}
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, Sections: []string{"main", "blah"}, EnableSSL: false}
+
+	// do not use the built-in createDirs() in case it is broken
+	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-cats", 0755); err != nil {
+		t.Errorf("error creating directory: %s\n", err)
+	}
+
+	origPackages, err := os.Open("samples/Packages")
+	if err != nil {
+		t.Errorf("error opening up sample packages: %s", err)
+	}
+	copyPackages, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages")
+	if err != nil {
+		t.Errorf("error creating copy of package file: %s", err)
+	}
+	defer copyPackages.Close()
+	_, err = io.Copy(copyPackages, origPackages)
+	if err != nil {
+		t.Errorf("error writing copy of package file: %s", err)
+	}
+
+	origPackagesGz, err := os.Open("samples/Packages.gz")
+	if err != nil {
+		t.Errorf("error opening up sample packages: %s", err)
+	}
+	copyPackagesGz, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
+	if err != nil {
+		t.Errorf("error creating copy of package file: %s", err)
+	}
+	defer copyPackagesGz.Close()
+	_, err = io.Copy(copyPackagesGz, origPackagesGz)
+	if err != nil {
+		t.Errorf("error writing copy of package file: %s", err)
+	}
+
+	if err := createRelease(config, "stable"); err != nil {
+		t.Errorf("error creating Releases file: %s", err)
+	}
+
+	releaseFile, err := os.Open(config.RootRepoPath + "/dists/stable/Release")
+	if err != nil {
+		t.Errorf("error reading Release file: %s", err)
+	}
+	buf := bytes.NewBuffer(nil)
+	io.Copy(buf, releaseFile)
+	if goodReleaseOutput != string(buf.String()) {
+		t.Errorf("Releases does not match, returned value is:\n %s \n\n should be:\n %s", string(buf.Bytes()), goodReleaseOutput)
+	}
+
+	if err := os.RemoveAll(config.RootRepoPath); err != nil {
+		t.Errorf("error cleaning up after createRelease(): %s", err)
+	}
+}
+	}
 }
 
 func TestCreatePackagesGzNonDefault(t *testing.T) {

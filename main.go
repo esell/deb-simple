@@ -58,6 +58,12 @@ var (
 	generateKey  = flag.Bool("g", false, "generate an API key")
 	parsedconfig = conf{}
 	mywatcher    *fsnotify.Watcher
+
+
+	//Create a package level time function so we can mock it out
+	Now = func() time.Time {
+		return time.Now()
+	}
 )
 
 func main() {
@@ -115,12 +121,13 @@ func main() {
 			case event := <-mywatcher.Events:
 				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Create == fsnotify.Create) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
 					mutex.Lock()
-					if filepath.Base(event.Name) != "Packages.gz" {
+					if filepath.Ext(event.Name) == ".deb" {
 						log.Println("Event: ", event)
 						distroArch := destructPath(event.Name)
 						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
 							log.Printf("error creating package: %s", err)
 						}
+						createRelease(parsedconfig, distroArch[0])
 					}
 					mutex.Unlock()
 				}
@@ -247,13 +254,18 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 }
 
 func createPackagesGz(config conf, distro, section, arch string) error {
-	outfile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages.gz"))
+	packageFile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages"))
+	packageGzFile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
 	}
-	defer outfile.Close()
-	gzOut := gzip.NewWriter(outfile)
+	defer packageFile.Close()
+	defer packageGzFile.Close()
+	gzOut := gzip.NewWriter(packageGzFile)
 	defer gzOut.Close()
+
+	writer := io.MultiWriter(packageFile, gzOut)
+
 	// loop through each directory
 	// run inspectPackage
 	dirList, err := ioutil.ReadDir(config.ArchPath(distro, section, arch))
@@ -302,15 +314,90 @@ func createPackagesGz(config conf, distro, section, arch string) error {
 			if i != (len(dirList) - 1) {
 				packBuf.WriteString("\n\n")
 			}
-			gzOut.Write(packBuf.Bytes())
+			writer.Write(packBuf.Bytes())
 			f = nil
 		}
 	}
 
-	gzOut.Flush()
 	return nil
 }
 
+func createRelease(config conf, distro string) error {
+
+	workingDirectory := filepath.Join(config.RootRepoPath, "dists", distro)
+
+	outfile, err := os.Create(filepath.Join(workingDirectory, "Release"))
+	if err != nil {
+		return fmt.Errorf("failed to create Release: %s", err)
+	}
+	defer outfile.Close()
+	
+	current_time := Now().UTC()
+    fmt.Fprintf(outfile, "Suite: %s\n", distro)
+    fmt.Fprintf(outfile, "Codename: %s\n", distro)
+    fmt.Fprintf(outfile, "Components: %s\n", strings.Join(config.Sections, " "))
+    fmt.Fprintf(outfile, "Architectures: %s\n", strings.Join(config.SupportArch, " "))
+    fmt.Fprintf(outfile, "Date: %s\n", current_time.Format("Mon, 02 Jan 2006 15:04:05 UTC"))
+
+	var md5Sums strings.Builder
+	var sha1Sums strings.Builder
+	var sha256Sums strings.Builder
+
+	err = filepath.Walk(workingDirectory, func(path string, file os.FileInfo, err error) error {
+	    if err != nil {
+	        return err
+	    }
+
+    	if strings.HasSuffix(path, "Packages.gz") || strings.HasSuffix(path, "Packages") {
+
+    		var relPath string
+    		relPath, err := filepath.Rel(workingDirectory, path)
+    		spath := filepath.ToSlash(relPath)
+    		f, err := os.Open(path)
+    		var (
+    			md5hash    = md5.New()
+    			sha1hash   = sha1.New()
+    			sha256hash = sha256.New()
+    		)
+    		if _, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f); err != nil {
+    			log.Println("error with the md5 hash: ", err)
+    		}
+    		fmt.Fprintf(&md5Sums, " %s %d %s\n",
+    			hex.EncodeToString(md5hash.Sum(nil)),
+    			file.Size(), spath)
+
+    		if _, err = io.Copy(sha1hash, f); err != nil {
+    			log.Println("error with the sha1 hash: ", err)
+    		}
+    		fmt.Fprintf(&sha1Sums, " %s %d %s\n",
+    			hex.EncodeToString(sha1hash.Sum(nil)),
+    			file.Size(), spath)
+
+    		if _, err = io.Copy(sha256hash, f); err != nil {
+    			log.Println("error with the sha256 hash: ", err)
+    		}
+    		fmt.Fprintf(&sha256Sums, " %s %d %s\n",
+    			hex.EncodeToString(sha256hash.Sum(nil)),
+    			file.Size(), spath)
+
+    		f = nil
+    	}
+	    return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("scanning: %s: %s", distro, err)
+	}
+
+	outfile.WriteString("MD5Sum:\n")
+	outfile.WriteString(md5Sums.String())
+	outfile.WriteString("SHA1:\n")
+	outfile.WriteString(sha1Sums.String())
+	outfile.WriteString("SHA256:\n")
+	outfile.WriteString(sha256Sums.String())
+
+	return nil
+}
 func uploadHandler(config conf, db *bolt.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
