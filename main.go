@@ -202,7 +202,7 @@ func inspectPackage(filename string) (string, error) {
 			return "", fmt.Errorf("error in inspectPackage loop: %s", err)
 		}
 
-		if header.Name == "control.tar.gz" {
+		if strings.TrimRight(header.Name, "/") == "control.tar.gz" {
 			io.Copy(&controlBuf, arReader)
 			return inspectPackageControl(controlBuf)
 		}
