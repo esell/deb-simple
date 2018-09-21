@@ -22,7 +22,7 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 - Does NOT require a changes file
 - Supports uploads from various locations without corrupting the repo
 - Supports API keys to protect who can upload/delete packages
-
+- Supports signing package release files
 
 # What it doesn't do:
 - Create actual packages
@@ -51,6 +51,25 @@ To use your new repo you will have to add a line like this to your sources.list 
 
 `my-hostname` should be the actual hostname/IP where you are running deb-simple and `listenPort` will be whatever you set in the config. By default deb-simple puts everything into the `stable` distro and `main` section but these can be changed in the config. If you have enabled SSL you will want to swap `http` for `https`.
 
+# Package Signing
+
+deb-simple can sign the package release file for you, which will stop `apt-get` from complaining about insecure sources when you update. To do this you need to enable it in the config file by setting `enableSigning` to `true`, and `privateKey` to the path to your GPG signing key.
+
+If you don't have an existing key deb-simple can help generate one for you. Run:
+```
+./deb-simple -k -kn "My Name" -ke "my.email@provider.com"
+```
+
+This will produce two files in the current directory: `public.key` and `private.key`. I suggest putting `public.key` in the repository root somewhere so it can be downloaded by clients that need it, and putting `private.key` somewhere
+relatively secure on the file system.
+
+To add your new key on a client run the following command:
+```
+wget -qO - http://my-hostname:listenPort/public.key | sudo apt-key add -
+```
+
+This uses Go's native `openpgp` library, so key support is cross platform, and doesn't require or interact with any
+existing keyring on the system.
 
 # Using API keys:
 
