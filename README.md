@@ -71,6 +71,13 @@ If you want to continuous deliver created packages to deb-simple server, it is n
 somewhere others could find it. You can use [deb-simple-cd-helper](https://github.com/paulkramme/deb-simple-cd-help),
 which allows you to place a plaintext file with the api key somewhere on your build server without the need to expose it.
 
+
+# Do you use this?
+
+If you use deb-simple somewhere I'd love to hear about it! Make a PR to add your company/group/cult :)
+
+
+
 # License:
 
 [MIT](LICENSE.txt) so go crazy
