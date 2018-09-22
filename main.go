@@ -119,7 +119,7 @@ func main() {
 		for {
 			select {
 			case event := <-mywatcher.Events:
-				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Create == fsnotify.Create) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
+				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
 					mutex.Lock()
 					if filepath.Ext(event.Name) == ".deb" {
 						log.Println("Event: ", event)
