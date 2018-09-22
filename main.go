@@ -65,9 +65,9 @@ var (
 	generateSigningKey  = flag.Bool("k", false, "Generate a signing key pair")
 	keyName      = flag.String("kn", "", "Name for the siging key")
 	keyEmail     = flag.String("ke", "", "Email address")
+	verbose      = flag.Bool("v", false, "Print verbose logs")
 	parsedconfig = conf{}
 	mywatcher    *fsnotify.Watcher
-
 
 	//Create a package level time function so we can mock it out
 	Now = func() time.Time {
@@ -146,7 +146,9 @@ func main() {
 				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
 					mutex.Lock()
 					if filepath.Ext(event.Name) == ".deb" {
-						log.Println("Event: ", event)
+						if *verbose {
+							log.Println("Event: ", event)
+						}
 						distroArch := destructPath(event.Name)
 						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
 							log.Printf("error creating package: %s", err)
@@ -222,6 +224,10 @@ func inspectPackage(filename string) (string, error) {
 		return "", fmt.Errorf("error opening package file %s: %s", filename, err)
 	}
 
+	if *verbose {
+		log.Printf("Inpecting package file \"%s\"", filename)
+	}
+
 	arReader := ar.NewReader(f)
 	defer f.Close()
 	var controlBuf bytes.Buffer
@@ -239,6 +245,9 @@ func inspectPackage(filename string) (string, error) {
 
 		if strings.TrimRight(header.Name, "/") == "control.tar.gz" {
 			io.Copy(&controlBuf, arReader)
+			if *verbose {
+				log.Println("\t Found a package control file")
+			}
 			return inspectPackageControl(controlBuf)
 		}
 
@@ -286,6 +295,11 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 }
 
 func createPackagesGz(config conf, distro, section, arch string) error {
+
+	if *verbose {
+		log.Printf("Rebuilding Packages.gz file for %s %s %s", distro, section, arch)
+	}
+
 	packageFile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages"))
 	packageGzFile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages.gz"))
 	if err != nil {
@@ -349,6 +363,10 @@ func createPackagesGz(config conf, distro, section, arch string) error {
 }
 
 func createRelease(config conf, distro string) error {
+
+	if *verbose {
+		log.Printf("Creating release file for \"%s\"", distro)
+	}
 
 	workingDirectory := filepath.Join(config.RootRepoPath, "dists", distro)
 
@@ -422,6 +440,10 @@ func createRelease(config conf, distro string) error {
 }
 
 func signRelease(config conf, filename string) error {
+
+	if *verbose {
+		log.Printf("Signing release file \"%s\"", filename)
+	}
 
 	entity := createEntityFromPrivateKey(config.PrivateKey)
 
@@ -549,6 +571,7 @@ func createKeyHandler(workingDirectory, name, email string) {
 
 func uploadHandler(config conf, db *bolt.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
 		if r.Method != "POST" {
 			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
@@ -590,6 +613,11 @@ func uploadHandler(config conf, db *bolt.DB) http.Handler {
 				continue
 			}
 			dst, err := os.Create(filepath.Join(config.ArchPath(distroName, section, archType), part.FileName()))
+
+			if *verbose {
+				log.Printf("Deb package %s has been uploaded to %s %s %s", part.FileName(), distroName, section, archType)
+			}
+
 			if err != nil {
 				httpErrorf(w, "error creating deb file: %s", err)
 				return
@@ -606,6 +634,7 @@ func uploadHandler(config conf, db *bolt.DB) http.Handler {
 
 func deleteHandler(config conf, db *bolt.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
 		if r.Method != "DELETE" {
 			http.Error(w, "method not supported", http.StatusMethodNotAllowed)
 			return
@@ -630,6 +659,10 @@ func deleteHandler(config conf, db *bolt.DB) http.Handler {
 		if err := os.Remove(debPath); err != nil {
 			httpErrorf(w, "failed to delete: %s", err)
 			return
+		}
+
+		if *verbose {
+			log.Printf("Deb package %s has been deleted", toDelete.Filename)
 		}
 	})
 }
