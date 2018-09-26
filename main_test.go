@@ -267,8 +267,8 @@ func TestCreatePackagesGz(t *testing.T) {
 	}
 	buf := bytes.NewBuffer(nil)
 	io.Copy(buf, pkgReader)
-	if goodPkgGzOutput != string(buf.Bytes()) {
-		t.Errorf("Packages.gz does not match, returned value is:\n %s \n\n should be:\n %s", string(buf.Bytes()), goodPkgGzOutput)
+	if goodPkgGzOutput != buf.String() {
+		t.Errorf("Packages.gz does not match, returned value is:\n %s \n\n should be:\n %s", buf.String(), goodPkgGzOutput)
 	}
 
 	pkgFile, err := ioutil.ReadFile(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages")
@@ -276,7 +276,7 @@ func TestCreatePackagesGz(t *testing.T) {
 		t.Errorf("error reading Packages: %s", err)
 	}
 	if goodPkgGzOutput != string(pkgFile) {
-		t.Errorf("Packages does not match, returned value is:\n %s \n\n should be:\n %s", string(buf.Bytes()), goodPkgGzOutput)
+		t.Errorf("Packages does not match, returned value is:\n %s \n\n should be:\n %s", buf.String(), goodPkgGzOutput)
 	}
 
 	// cleanup
@@ -357,7 +357,7 @@ func TestCreateRelease(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	io.Copy(buf, releaseFile)
 	if goodReleaseOutput != string(buf.String()) {
-		t.Errorf("Releases does not match, returned value is:\n %s \n\n should be:\n %s", string(buf.Bytes()), goodReleaseOutput)
+		t.Errorf("Releases does not match, returned value is:\n %s \n\n should be:\n %s", buf.String(), goodReleaseOutput)
 	}
 
 	if err := os.RemoveAll(config.RootRepoPath); err != nil {
@@ -552,8 +552,8 @@ func TestCreatePackagesGzNonDefault(t *testing.T) {
 	}
 	buf := bytes.NewBuffer(nil)
 	io.Copy(buf, pkgReader)
-	if goodPkgGzOutputNonDefault != string(buf.Bytes()) {
-		t.Errorf("Packages.gz does not match, returned value is: %s", string(buf.Bytes()))
+	if goodPkgGzOutputNonDefault != buf.String() {
+		t.Errorf("Packages.gz does not match, returned value is: %s", buf.String())
 	}
 
 	// cleanup
