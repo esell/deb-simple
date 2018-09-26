@@ -59,15 +59,15 @@ type deleteObj struct {
 }
 
 var (
-	mutex        sync.Mutex
-	configFile   = flag.String("c", "conf.json", "config file location")
-	generateKey  = flag.Bool("g", false, "generate an API key")
-	generateSigningKey  = flag.Bool("k", false, "Generate a signing key pair")
-	keyName      = flag.String("kn", "", "Name for the siging key")
-	keyEmail     = flag.String("ke", "", "Email address")
-	verbose      = flag.Bool("v", false, "Print verbose logs")
-	parsedconfig = conf{}
-	mywatcher    *fsnotify.Watcher
+	mutex              sync.Mutex
+	configFile         = flag.String("c", "conf.json", "config file location")
+	generateKey        = flag.Bool("g", false, "generate an API key")
+	generateSigningKey = flag.Bool("k", false, "Generate a signing key pair")
+	keyName            = flag.String("kn", "", "Name for the siging key")
+	keyEmail           = flag.String("ke", "", "Email address")
+	verbose            = flag.Bool("v", false, "Print verbose logs")
+	parsedconfig       = conf{}
+	mywatcher          *fsnotify.Watcher
 
 	//Create a package level time function so we can mock it out
 	Now = func() time.Time {
@@ -375,50 +375,50 @@ func createRelease(config conf, distro string) error {
 		return fmt.Errorf("failed to create Release: %s", err)
 	}
 	defer outfile.Close()
-	
+
 	current_time := Now().UTC()
-    fmt.Fprintf(outfile, "Suite: %s\n", distro)
-    fmt.Fprintf(outfile, "Codename: %s\n", distro)
-    fmt.Fprintf(outfile, "Components: %s\n", strings.Join(config.Sections, " "))
-    fmt.Fprintf(outfile, "Architectures: %s\n", strings.Join(config.SupportArch, " "))
-    fmt.Fprintf(outfile, "Date: %s\n", current_time.Format("Mon, 02 Jan 2006 15:04:05 UTC"))
+	fmt.Fprintf(outfile, "Suite: %s\n", distro)
+	fmt.Fprintf(outfile, "Codename: %s\n", distro)
+	fmt.Fprintf(outfile, "Components: %s\n", strings.Join(config.Sections, " "))
+	fmt.Fprintf(outfile, "Architectures: %s\n", strings.Join(config.SupportArch, " "))
+	fmt.Fprintf(outfile, "Date: %s\n", current_time.Format("Mon, 02 Jan 2006 15:04:05 UTC"))
 
 	var md5Sums strings.Builder
 	var sha1Sums strings.Builder
 	var sha256Sums strings.Builder
 
 	err = filepath.Walk(workingDirectory, func(path string, file os.FileInfo, err error) error {
-	    if err != nil {
-	        return err
-	    }
+		if err != nil {
+			return err
+		}
 
-    	if strings.HasSuffix(path, "Packages.gz") || strings.HasSuffix(path, "Packages") {
+		if strings.HasSuffix(path, "Packages.gz") || strings.HasSuffix(path, "Packages") {
 
-    		var relPath string
-    		relPath, err := filepath.Rel(workingDirectory, path)
-    		spath := filepath.ToSlash(relPath)
-    		f, err := os.Open(path)
-    		var (
-    			md5hash    = md5.New()
-    			sha1hash   = sha1.New()
-    			sha256hash = sha256.New()
-    		)
-    		if _, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f); err != nil {
-    			return fmt.Errorf("Error hashing file for Release list: %s", err)
-    		}
-    		fmt.Fprintf(&md5Sums, " %s %d %s\n",
-    			hex.EncodeToString(md5hash.Sum(nil)),
-    			file.Size(), spath)
-    		fmt.Fprintf(&sha1Sums, " %s %d %s\n",
-    			hex.EncodeToString(sha1hash.Sum(nil)),
-    			file.Size(), spath)
-    		fmt.Fprintf(&sha256Sums, " %s %d %s\n",
-    			hex.EncodeToString(sha256hash.Sum(nil)),
-    			file.Size(), spath)
+			var relPath string
+			relPath, err := filepath.Rel(workingDirectory, path)
+			spath := filepath.ToSlash(relPath)
+			f, err := os.Open(path)
+			var (
+				md5hash    = md5.New()
+				sha1hash   = sha1.New()
+				sha256hash = sha256.New()
+			)
+			if _, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f); err != nil {
+				return fmt.Errorf("Error hashing file for Release list: %s", err)
+			}
+			fmt.Fprintf(&md5Sums, " %s %d %s\n",
+				hex.EncodeToString(md5hash.Sum(nil)),
+				file.Size(), spath)
+			fmt.Fprintf(&sha1Sums, " %s %d %s\n",
+				hex.EncodeToString(sha1hash.Sum(nil)),
+				file.Size(), spath)
+			fmt.Fprintf(&sha256Sums, " %s %d %s\n",
+				hex.EncodeToString(sha256hash.Sum(nil)),
+				file.Size(), spath)
 
-    		f = nil
-    	}
-	    return nil
+			f = nil
+		}
+		return nil
 	})
 
 	if err != nil {
@@ -448,7 +448,7 @@ func signRelease(config conf, filename string) error {
 	entity := createEntityFromPrivateKey(config.PrivateKey)
 
 	workingDirectory := filepath.Dir(filename)
-	
+
 	releaseFile, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("Error opening Release file (%s) for writing: %s", filename, err)
@@ -462,13 +462,13 @@ func signRelease(config conf, filename string) error {
 		return fmt.Errorf("Error signing release file: %s", err)
 	}
 
-	releaseFile.Seek(0,0)
+	releaseFile.Seek(0, 0)
 
 	inlineRelease, err := os.Create(filepath.Join(workingDirectory, "InRelease"))
 	writer, err := clearsign.Encode(inlineRelease, entity.PrivateKey, nil)
 	io.Copy(writer, releaseFile)
 	writer.Close()
-	
+
 	return nil
 }
 
@@ -496,7 +496,7 @@ func createKeyPair(name, comment, email string) (*openpgp.Entity, string, string
 		log.Fatalf("Error encoding public key: %s", err)
 	}
 	w.Close()
-	publicKey := buf.String();
+	publicKey := buf.String()
 
 	buf = bytes.NewBuffer(nil)
 	w, err = armor.Encode(buf, openpgp.PrivateKeyType, headers)
@@ -508,18 +508,18 @@ func createKeyPair(name, comment, email string) (*openpgp.Entity, string, string
 		log.Fatalf("Error encoding private key: %s", err)
 	}
 	w.Close()
-	privateKey := buf.String();
+	privateKey := buf.String()
 
 	return entity, publicKey, privateKey
 }
 
-func createEntityFromPrivateKey(privateKeyPath string) (*openpgp.Entity) {
+func createEntityFromPrivateKey(privateKeyPath string) *openpgp.Entity {
 
 	privateKeyData, err := os.Open(privateKeyPath)
 	defer privateKeyData.Close()
 
 	if err != nil {
-		log.Fatalf("Error opening private key file: %s", err);
+		log.Fatalf("Error opening private key file: %s", err)
 	}
 
 	block, err := armor.Decode(privateKeyData)
@@ -550,7 +550,7 @@ func createEntityFromPrivateKey(privateKeyPath string) (*openpgp.Entity) {
 func createKeyHandler(workingDirectory, name, email string) {
 
 	_, publicKey, privateKey := createKeyPair(name, "Generated by deb-simple", email)
-	
+
 	pubFile, err := os.Create(filepath.Join(workingDirectory, "public.key"))
 	defer pubFile.Close()
 
@@ -558,7 +558,7 @@ func createKeyHandler(workingDirectory, name, email string) {
 		log.Fatalf("Could not open public key file for writing: %s", err)
 	}
 
-	pubFile.WriteString(publicKey);
+	pubFile.WriteString(publicKey)
 	priFile, err := os.Create(filepath.Join(workingDirectory, "private.key"))
 	defer priFile.Close()
 
@@ -566,7 +566,7 @@ func createKeyHandler(workingDirectory, name, email string) {
 		log.Fatalf("Could not open private key file for writing: %s", err)
 	}
 
-	priFile.WriteString(privateKey);
+	priFile.WriteString(privateKey)
 }
 
 func uploadHandler(config conf, db *bolt.DB) http.Handler {
