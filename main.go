@@ -117,7 +117,7 @@ func main() {
 
 		workingDirectory, err := os.Getwd()
 		if err != nil {
-			fmt.Errorf("Unable to get current working directory: %s", err)
+			log.Fatalf("Unable to get current working directory: %s", err)
 		}
 
 		fmt.Println("Generating new signing key pair..")
@@ -152,7 +152,9 @@ func main() {
 							log.Printf("error creating package: %s", err)
 						}
 						if parsedconfig.EnableSigning {
-							createRelease(parsedconfig, distroArch[0])
+							if err := createRelease(parsedconfig, distroArch[0]); err != nil {
+								log.Printf("Error creating Release file: %s", err)
+							}
 						}
 					}
 					mutex.Unlock()
@@ -327,18 +329,12 @@ func createPackagesGz(config conf, distro, section, arch string) error {
 			)
 			_, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f)
 			if err != nil {
-				log.Println("error with the md5 hash: ", err)
+				return fmt.Errorf("Error hashing file for Packages file: %s", err)
 			}
 			fmt.Fprintf(&packBuf, "MD5sum: %s\n",
 				hex.EncodeToString(md5hash.Sum(nil)))
-			if _, err = io.Copy(sha1hash, f); err != nil {
-				log.Println("error with the sha1 hash: ", err)
-			}
 			fmt.Fprintf(&packBuf, "SHA1: %s\n",
 				hex.EncodeToString(sha1hash.Sum(nil)))
-			if _, err = io.Copy(sha256hash, f); err != nil {
-				log.Println("error with the sha256 hash: ", err)
-			}
 			fmt.Fprintf(&packBuf, "SHA256: %s\n",
 				hex.EncodeToString(sha256hash.Sum(nil)))
 			if i != (len(dirList) - 1) {
@@ -390,22 +386,14 @@ func createRelease(config conf, distro string) error {
     			sha256hash = sha256.New()
     		)
     		if _, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f); err != nil {
-    			log.Println("error with the md5 hash: ", err)
+    			return fmt.Errorf("Error hashing file for Release list: %s", err)
     		}
     		fmt.Fprintf(&md5Sums, " %s %d %s\n",
     			hex.EncodeToString(md5hash.Sum(nil)),
     			file.Size(), spath)
-
-    		if _, err = io.Copy(sha1hash, f); err != nil {
-    			log.Println("error with the sha1 hash: ", err)
-    		}
     		fmt.Fprintf(&sha1Sums, " %s %d %s\n",
     			hex.EncodeToString(sha1hash.Sum(nil)),
     			file.Size(), spath)
-
-    		if _, err = io.Copy(sha256hash, f); err != nil {
-    			log.Println("error with the sha256 hash: ", err)
-    		}
     		fmt.Fprintf(&sha256Sums, " %s %d %s\n",
     			hex.EncodeToString(sha256hash.Sum(nil)),
     			file.Size(), spath)
@@ -426,8 +414,8 @@ func createRelease(config conf, distro string) error {
 	outfile.WriteString("SHA256:\n")
 	outfile.WriteString(sha256Sums.String())
 
-	if config.EnableSigning {
-		signRelease(config, outfile.Name())
+	if err = signRelease(config, outfile.Name()); err != nil {
+		return err
 	}
 
 	return nil
