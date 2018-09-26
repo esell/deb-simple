@@ -69,7 +69,7 @@ var (
 	parsedconfig       = conf{}
 	mywatcher          *fsnotify.Watcher
 
-	//Create a package level time function so we can mock it out
+	// Now is a package level time function so we can mock it out
 	Now = func() time.Time {
 		return time.Now()
 	}
@@ -376,12 +376,12 @@ func createRelease(config conf, distro string) error {
 	}
 	defer outfile.Close()
 
-	current_time := Now().UTC()
+	currentTime := Now().UTC()
 	fmt.Fprintf(outfile, "Suite: %s\n", distro)
 	fmt.Fprintf(outfile, "Codename: %s\n", distro)
 	fmt.Fprintf(outfile, "Components: %s\n", strings.Join(config.Sections, " "))
 	fmt.Fprintf(outfile, "Architectures: %s\n", strings.Join(config.SupportArch, " "))
-	fmt.Fprintf(outfile, "Date: %s\n", current_time.Format("Mon, 02 Jan 2006 15:04:05 UTC"))
+	fmt.Fprintf(outfile, "Date: %s\n", currentTime.Format("Mon, 02 Jan 2006 15:04:05 UTC"))
 
 	var md5Sums strings.Builder
 	var sha1Sums strings.Builder
@@ -688,7 +688,7 @@ func createAPIkey(db *bolt.DB) (string, error) {
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("APIkeys"))
 		if b == nil {
-			return errors.New("database bucket does not exist!")
+			return errors.New("Database bucket \"APIkeys\" does not exist")
 		}
 
 		err = b.Put([]byte(apiKey), []byte(apiKey))
@@ -696,9 +696,8 @@ func createAPIkey(db *bolt.DB) (string, error) {
 	})
 	if err != nil {
 		return "", err
-	} else {
-		return apiKey, nil
 	}
+	return apiKey, nil
 }
 
 func validateAPIkey(db *bolt.DB, key string) bool {
@@ -712,9 +711,8 @@ func validateAPIkey(db *bolt.DB, key string) bool {
 	})
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func httpErrorf(w http.ResponseWriter, format string, a ...interface{}) {
