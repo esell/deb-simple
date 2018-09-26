@@ -27,6 +27,10 @@ import (
 	"github.com/blakesmith/ar"
 	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
+	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/armor"
+	"golang.org/x/crypto/openpgp/clearsign"
+	"golang.org/x/crypto/openpgp/packet"
 )
 
 type conf struct {
@@ -39,6 +43,8 @@ type conf struct {
 	SSLCert       string   `json:"SSLcert"`
 	SSLKey        string   `json:"SSLkey"`
 	EnableAPIKeys bool     `json:"enableAPIKeys"`
+	EnableSigning bool     `json:"enableSigning"`
+	PrivateKey    string   `json:"privateKey"`
 }
 
 func (c conf) ArchPath(distro, section, arch string) string {
@@ -56,8 +62,17 @@ var (
 	mutex        sync.Mutex
 	configFile   = flag.String("c", "conf.json", "config file location")
 	generateKey  = flag.Bool("g", false, "generate an API key")
+	generateSigningKey  = flag.Bool("k", false, "Generate a signing key pair")
+	keyName      = flag.String("kn", "", "Name for the siging key")
+	keyEmail     = flag.String("ke", "", "Email address")
 	parsedconfig = conf{}
 	mywatcher    *fsnotify.Watcher
+
+
+	//Create a package level time function so we can mock it out
+	Now = func() time.Time {
+		return time.Now()
+	}
 )
 
 func main() {
@@ -98,6 +113,21 @@ func main() {
 		os.Exit(0)
 	}
 
+	if *generateSigningKey {
+
+		workingDirectory, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("Unable to get current working directory: %s", err)
+		}
+
+		fmt.Println("Generating new signing key pair..")
+		fmt.Printf("Name: %s\n", *keyName)
+		fmt.Printf("Email: %s\n", *keyEmail)
+		createKeyHandler(workingDirectory, *keyName, *keyEmail)
+		fmt.Println("Done.")
+		os.Exit(0)
+	}
+
 	// fire up filesystem watcher
 	mywatcher, err = fsnotify.NewWatcher()
 	if err != nil {
@@ -113,13 +143,18 @@ func main() {
 		for {
 			select {
 			case event := <-mywatcher.Events:
-				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Create == fsnotify.Create) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
+				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
 					mutex.Lock()
-					if filepath.Base(event.Name) != "Packages.gz" {
+					if filepath.Ext(event.Name) == ".deb" {
 						log.Println("Event: ", event)
 						distroArch := destructPath(event.Name)
 						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
 							log.Printf("error creating package: %s", err)
+						}
+						if parsedconfig.EnableSigning {
+							if err := createRelease(parsedconfig, distroArch[0]); err != nil {
+								log.Printf("Error creating Release file: %s", err)
+							}
 						}
 					}
 					mutex.Unlock()
@@ -133,6 +168,10 @@ func main() {
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedconfig.RootRepoPath))))
 	http.Handle("/upload", uploadHandler(parsedconfig, db))
 	http.Handle("/delete", deleteHandler(parsedconfig, db))
+
+	if parsedconfig.EnableSigning {
+		log.Println("Release signing is enabled")
+	}
 
 	if parsedconfig.EnableSSL {
 		log.Println("running with SSL enabled")
@@ -247,13 +286,18 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 }
 
 func createPackagesGz(config conf, distro, section, arch string) error {
-	outfile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages.gz"))
+	packageFile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages"))
+	packageGzFile, err := os.Create(filepath.Join(config.ArchPath(distro, section, arch), "Packages.gz"))
 	if err != nil {
 		return fmt.Errorf("failed to create packages.gz: %s", err)
 	}
-	defer outfile.Close()
-	gzOut := gzip.NewWriter(outfile)
+	defer packageFile.Close()
+	defer packageGzFile.Close()
+	gzOut := gzip.NewWriter(packageGzFile)
 	defer gzOut.Close()
+
+	writer := io.MultiWriter(packageFile, gzOut)
+
 	// loop through each directory
 	// run inspectPackage
 	dirList, err := ioutil.ReadDir(config.ArchPath(distro, section, arch))
@@ -285,30 +329,222 @@ func createPackagesGz(config conf, distro, section, arch string) error {
 			)
 			_, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f)
 			if err != nil {
-				log.Println("error with the md5 hash: ", err)
+				return fmt.Errorf("Error hashing file for Packages file: %s", err)
 			}
 			fmt.Fprintf(&packBuf, "MD5sum: %s\n",
 				hex.EncodeToString(md5hash.Sum(nil)))
-			if _, err = io.Copy(sha1hash, f); err != nil {
-				log.Println("error with the sha1 hash: ", err)
-			}
 			fmt.Fprintf(&packBuf, "SHA1: %s\n",
 				hex.EncodeToString(sha1hash.Sum(nil)))
-			if _, err = io.Copy(sha256hash, f); err != nil {
-				log.Println("error with the sha256 hash: ", err)
-			}
 			fmt.Fprintf(&packBuf, "SHA256: %s\n",
 				hex.EncodeToString(sha256hash.Sum(nil)))
 			if i != (len(dirList) - 1) {
 				packBuf.WriteString("\n\n")
 			}
-			gzOut.Write(packBuf.Bytes())
+			writer.Write(packBuf.Bytes())
 			f = nil
 		}
 	}
 
-	gzOut.Flush()
 	return nil
+}
+
+func createRelease(config conf, distro string) error {
+
+	workingDirectory := filepath.Join(config.RootRepoPath, "dists", distro)
+
+	outfile, err := os.Create(filepath.Join(workingDirectory, "Release"))
+	if err != nil {
+		return fmt.Errorf("failed to create Release: %s", err)
+	}
+	defer outfile.Close()
+	
+	current_time := Now().UTC()
+    fmt.Fprintf(outfile, "Suite: %s\n", distro)
+    fmt.Fprintf(outfile, "Codename: %s\n", distro)
+    fmt.Fprintf(outfile, "Components: %s\n", strings.Join(config.Sections, " "))
+    fmt.Fprintf(outfile, "Architectures: %s\n", strings.Join(config.SupportArch, " "))
+    fmt.Fprintf(outfile, "Date: %s\n", current_time.Format("Mon, 02 Jan 2006 15:04:05 UTC"))
+
+	var md5Sums strings.Builder
+	var sha1Sums strings.Builder
+	var sha256Sums strings.Builder
+
+	err = filepath.Walk(workingDirectory, func(path string, file os.FileInfo, err error) error {
+	    if err != nil {
+	        return err
+	    }
+
+    	if strings.HasSuffix(path, "Packages.gz") || strings.HasSuffix(path, "Packages") {
+
+    		var relPath string
+    		relPath, err := filepath.Rel(workingDirectory, path)
+    		spath := filepath.ToSlash(relPath)
+    		f, err := os.Open(path)
+    		var (
+    			md5hash    = md5.New()
+    			sha1hash   = sha1.New()
+    			sha256hash = sha256.New()
+    		)
+    		if _, err = io.Copy(io.MultiWriter(md5hash, sha1hash, sha256hash), f); err != nil {
+    			return fmt.Errorf("Error hashing file for Release list: %s", err)
+    		}
+    		fmt.Fprintf(&md5Sums, " %s %d %s\n",
+    			hex.EncodeToString(md5hash.Sum(nil)),
+    			file.Size(), spath)
+    		fmt.Fprintf(&sha1Sums, " %s %d %s\n",
+    			hex.EncodeToString(sha1hash.Sum(nil)),
+    			file.Size(), spath)
+    		fmt.Fprintf(&sha256Sums, " %s %d %s\n",
+    			hex.EncodeToString(sha256hash.Sum(nil)),
+    			file.Size(), spath)
+
+    		f = nil
+    	}
+	    return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("scanning: %s: %s", distro, err)
+	}
+
+	outfile.WriteString("MD5Sum:\n")
+	outfile.WriteString(md5Sums.String())
+	outfile.WriteString("SHA1:\n")
+	outfile.WriteString(sha1Sums.String())
+	outfile.WriteString("SHA256:\n")
+	outfile.WriteString(sha256Sums.String())
+
+	if err = signRelease(config, outfile.Name()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func signRelease(config conf, filename string) error {
+
+	entity := createEntityFromPrivateKey(config.PrivateKey)
+
+	workingDirectory := filepath.Dir(filename)
+	
+	releaseFile, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("Error opening Release file (%s) for writing: %s", filename, err)
+	}
+
+	releaseGpg, err := os.Create(filepath.Join(workingDirectory, "Release.gpg"))
+	defer releaseGpg.Close()
+
+	err = openpgp.ArmoredDetachSign(releaseGpg, entity, releaseFile, nil)
+	if err != nil {
+		return fmt.Errorf("Error signing release file: %s", err)
+	}
+
+	releaseFile.Seek(0,0)
+
+	inlineRelease, err := os.Create(filepath.Join(workingDirectory, "InRelease"))
+	writer, err := clearsign.Encode(inlineRelease, entity.PrivateKey, nil)
+	io.Copy(writer, releaseFile)
+	writer.Close()
+	
+	return nil
+}
+
+func createKeyPair(name, comment, email string) (*openpgp.Entity, string, string) {
+
+	entity, err := openpgp.NewEntity(name, comment, email, nil)
+	if err != nil {
+		log.Fatalf("Error creating openpgp entity: %s", err)
+	}
+
+	serializedPrivateEntity := bytes.NewBuffer(nil)
+	entity.SerializePrivate(serializedPrivateEntity, nil)
+	serializedEntity := bytes.NewBuffer(nil)
+	entity.Serialize(serializedEntity)
+
+	buf := bytes.NewBuffer(nil)
+	headers := map[string]string{"Version": "GnuPG v1"}
+	w, err := armor.Encode(buf, openpgp.PublicKeyType, headers)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = w.Write(serializedEntity.Bytes())
+	if err != nil {
+		log.Fatalf("Error encoding public key: %s", err)
+	}
+	w.Close()
+	publicKey := buf.String();
+
+	buf = bytes.NewBuffer(nil)
+	w, err = armor.Encode(buf, openpgp.PrivateKeyType, headers)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = w.Write(serializedPrivateEntity.Bytes())
+	if err != nil {
+		log.Fatalf("Error encoding private key: %s", err)
+	}
+	w.Close()
+	privateKey := buf.String();
+
+	return entity, publicKey, privateKey
+}
+
+func createEntityFromPrivateKey(privateKeyPath string) (*openpgp.Entity) {
+
+	privateKeyData, err := os.Open(privateKeyPath)
+	defer privateKeyData.Close()
+
+	if err != nil {
+		log.Fatalf("Error opening private key file: %s", err);
+	}
+
+	block, err := armor.Decode(privateKeyData)
+
+	if block.Type != openpgp.PrivateKeyType {
+		log.Fatalf("Invalid private key type %s", block.Type)
+	}
+
+	reader := packet.NewReader(block.Body)
+	pkt, err := reader.Next()
+
+	if err != nil {
+		log.Fatalf("Error reading private key data: %s", err)
+	}
+
+	privateKey, ok := pkt.(*packet.PrivateKey)
+	if !ok {
+		log.Fatalf("Error parsing private key")
+	}
+
+	e := openpgp.Entity{
+		PrivateKey: privateKey,
+	}
+
+	return &e
+}
+
+func createKeyHandler(workingDirectory, name, email string) {
+
+	_, publicKey, privateKey := createKeyPair(name, "Generated by deb-simple", email)
+	
+	pubFile, err := os.Create(filepath.Join(workingDirectory, "public.key"))
+	defer pubFile.Close()
+
+	if err != nil {
+		log.Fatalf("Could not open public key file for writing: %s", err)
+	}
+
+	pubFile.WriteString(publicKey);
+	priFile, err := os.Create(filepath.Join(workingDirectory, "private.key"))
+	defer priFile.Close()
+
+	if err != nil {
+		log.Fatalf("Could not open private key file for writing: %s", err)
+	}
+
+	priFile.WriteString(privateKey);
 }
 
 func uploadHandler(config conf, db *bolt.DB) http.Handler {
