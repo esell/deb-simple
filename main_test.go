@@ -420,10 +420,10 @@ func TestSignRelease(t *testing.T) {
 		t.Errorf("error creating directory: %s\n", err)
 	}
 	copyPackages, err := os.Create(config.RootRepoPath + "/dists/stable/main/binary-cats/Packages.gz")
-	defer copyPackages.Close()
 	if err != nil {
 		t.Errorf("error creating copy of package file: %s", err)
 	}
+	defer copyPackages.Close()
 	_, err = io.Copy(copyPackages, origPackages)
 	if err != nil {
 		t.Errorf("error writing copy of package file: %s", err)
@@ -475,13 +475,16 @@ func TestSignRelease(t *testing.T) {
 func createEntityFromPublicKey(publicKeyPath string) *openpgp.Entity {
 
 	publicKeyData, err := os.Open(publicKeyPath)
-	defer publicKeyData.Close()
-
 	if err != nil {
 		log.Fatalf("Error opening public key file %s: %s", publicKeyPath, err)
 	}
+	defer publicKeyData.Close()
 
 	block, err := armor.Decode(publicKeyData)
+
+	if err != nil {
+		log.Fatalf("Error decoding public key data: %s", err)
+	}
 
 	if block.Type != openpgp.PublicKeyType {
 		log.Fatalf("Invalid public key type %s", block.Type)
