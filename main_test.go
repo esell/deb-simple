@@ -18,8 +18,8 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
 	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/packet"
 	"golang.org/x/crypto/openpgp/armor"
+	"golang.org/x/crypto/openpgp/packet"
 )
 
 var goodOutput = `Package: vim-tiny
@@ -311,7 +311,7 @@ func TestCreateRelease(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
-	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, Sections: []string{"main", "blah"}, EnableSSL: false}
+	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats", "dogs"}, DistroNames: []string{"stable"}, Sections: []string{"main", "blah"}, EnableSSL: false, EnableSigning: true, PrivateKey: pwd + "/testing/private.key"}
 
 	// do not use the built-in createDirs() in case it is broken
 	if err := os.MkdirAll(config.RootRepoPath+"/dists/stable/main/binary-cats", 0755); err != nil {
@@ -345,7 +345,7 @@ func TestCreateRelease(t *testing.T) {
 	if err != nil {
 		t.Errorf("error writing copy of package file: %s", err)
 	}
-
+	createKeyHandler(pwd+"/testing", "deb-simple test", "blah@blah.com")
 	if err := createRelease(config, "stable"); err != nil {
 		t.Errorf("error creating Releases file: %s", err)
 	}
@@ -372,7 +372,7 @@ func TestCreateKey(t *testing.T) {
 		t.Errorf("error creating directory: %s\n", err)
 	}
 
-	createKeyHandler(pwd + "/testing", "deb-simple Test", "deb-simple@go.go")
+	createKeyHandler(pwd+"/testing", "deb-simple Test", "deb-simple@go.go")
 
 	privateKey, err := os.Stat("testing/private.key")
 	if os.IsNotExist(err) {
@@ -407,7 +407,7 @@ func TestSignRelease(t *testing.T) {
 		t.Errorf("Unable to get current working directory: %s", err)
 	}
 
-	createKeyHandler(pwd + "/testing", "deb-simple Test", "deb-simple@go.go")
+	createKeyHandler(pwd+"/testing", "deb-simple Test", "deb-simple@go.go")
 
 	config := conf{ListenPort: "9666", RootRepoPath: pwd + "/testing", SupportArch: []string{"cats"}, DistroNames: []string{"stable"}, Sections: []string{"main"}, EnableSSL: false, EnableSigning: true, PrivateKey: pwd + "/testing/private.key"}
 
@@ -451,8 +451,8 @@ func TestSignRelease(t *testing.T) {
 		t.Error("Signed release was too small")
 	}
 
-	signature,_ := os.Open(config.RootRepoPath + "/dists/stable/Release.gpg")
-	message,_ := os.Open(config.RootRepoPath + "/dists/stable/Release")
+	signature, _ := os.Open(config.RootRepoPath + "/dists/stable/Release.gpg")
+	message, _ := os.Open(config.RootRepoPath + "/dists/stable/Release")
 	block, _ := armor.Decode(signature)
 	reader := packet.NewReader(block.Body)
 	pkt, _ := reader.Next()
@@ -472,13 +472,13 @@ func TestSignRelease(t *testing.T) {
 	}
 }
 
-func createEntityFromPublicKey(publicKeyPath string) (*openpgp.Entity) {
+func createEntityFromPublicKey(publicKeyPath string) *openpgp.Entity {
 
 	publicKeyData, err := os.Open(publicKeyPath)
 	defer publicKeyData.Close()
 
 	if err != nil {
-		log.Fatalf("Error opening public key file %s: %s", publicKeyPath, err);
+		log.Fatalf("Error opening public key file %s: %s", publicKeyPath, err)
 	}
 
 	block, err := armor.Decode(publicKeyData)
