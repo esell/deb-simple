@@ -7,5 +7,7 @@
     "enableSSL" : true,
     "SSLcert" : "server.crt",
     "SSLkey" : "server.key",
-    "enableAPIKeys" : false
+    "enableAPIKeys" : false,
+    "enableSigning" : true,
+    "privateKey" : "./private.key"
 }

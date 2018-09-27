@@ -11,8 +11,7 @@ before_install:
 - if ! go get github.com/golang/tools/cmd/cover; then go get golang.org/x/tools/cmd/cover;
   fi
 script:
-- cd $TRAVIS_BUILD_DIR && $HOME/gopath/bin/goveralls -service=travis-ci -repotoken
-  $COVERALLS_TOKEN
+- cd $TRAVIS_BUILD_DIR && $HOME/gopath/bin/goveralls -service=travis-ci -repotoken $COVERALLS_TOKEN
 - cd $TRAVIS_BUILD_DIR && dep ensure
 - cd $TRAVIS_BUILD_DIR && go test
 - cd $TRAVIS_BUILD_DIR && GOOS=linux GOARCH=amd64 go build -o deb-simple_linux
