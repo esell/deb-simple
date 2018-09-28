@@ -8,8 +8,9 @@ test:
 	go test -v
 clean:
 	go clean
-	rm -r release
+	rm -rf release
 build:
+	dep ensure
 	go build -o $(BINARY)
 
 .PHONY: release
