@@ -23,6 +23,7 @@ build-linux:
 build-osx:
 	GOOS=darwin go build -o release/$(BINARY)-$(VERSION)-osx
 build-deb:
+	which -s dpkg-deb || { echo "dpkg-deb does not exist, exiting..."; exit 1; }
 	mkdir release/$(BINARY)-$(VERSION)
 	mkdir -p release/$(BINARY)-$(VERSION)/usr/local/bin
 	mkdir -p release/$(BINARY)-$(VERSION)/etc/deb-simple
