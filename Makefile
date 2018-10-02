@@ -14,7 +14,7 @@ build:
 	go build -o $(BINARY)
 
 .PHONY: release
-release: build-win build-linux build-osx
+release: build-win build-linux build-osx build-deb
 
 build-win:
 	GOOS=windows go build -o release/$(BINARY)-$(VERSION)-win.exe
@@ -22,4 +22,11 @@ build-linux:
 	GOOS=linux go build -o release/${BINARY}-$(VERSION)-linux-amd64
 build-osx:
 	GOOS=darwin go build -o release/$(BINARY)-$(VERSION)-osx
-
+build-deb:
+	mkdir release/$(BINARY)-$(VERSION)
+	mkdir -p release/$(BINARY)-$(VERSION)/usr/local/bin
+	mkdir -p release/$(BINARY)-$(VERSION)/etc/deb-simple
+	cp -r DEBIAN release/$(BINARY)-$(VERSION)/
+	cp sample_conf.json release/$(BINARY)-$(VERSION)/etc/deb-simple/conf.json
+	GOOS=linux go build -o release/$(BINARY)-$(VERSION)/usr/local/bin/${BINARY}
+	dpkg-deb --build release/$(BINARY)-$(VERSION)

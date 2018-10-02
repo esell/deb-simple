@@ -1,0 +1,10 @@
+Package: deb-simple
+Version: 1.4.0
+Source: deb-simple
+Section: misc
+Priority: optional
+Architecture: amd64
+Depends: 
+Maintainer: esell <esell@esheavyindustries.com>
+Description: A bare-bones APT server
+ A lightweight, bare-bones apt repository server
