@@ -81,7 +81,8 @@ func inspectPackageControl(filename bytes.Buffer) (string, error) {
 		case tar.TypeDir:
 			continue
 		case tar.TypeReg:
-			if name == "./control" {
+			switch name {
+			case "control", "./control":
 				io.Copy(&controlBuf, tarReader)
 				return strings.TrimRight(controlBuf.String(), "\n") + "\n", nil
 			}
