@@ -1,9 +1,6 @@
 language: go
 go:
 - 1.11
-env:
-  global:
-    secure: HnE1v+rQUv872Py5OrFdFDL6kPGrGx3giBIHaP9fsMgFzyDNsDwuYeVwAM/8Ycm6IbB3louWJyo0xllae9WRsOsHG7p5Ra50Qt7d6QKeGdEYQNZBk/a9H9UhsaeIpY91xvXHlRG9h1pdkdmPY7iLxWtfPpPf48DqpvxNc/6SPrd3+nf/McnJz1CpkPtc7x5hwOfEHbmjtjOs6FbzQ/zTrFco68uiya5TZ1vquEPLzTEZz/qrrzSr3Qo5VXWH6C6jvPHjWJwSM6FBeey29ZuYFF2gLLPwmLZCPNulV8NoJRVQ/XOSuXqNEHCpsNqsidFPK8YVUTUgDJjwSNI2o0QmiA0l/sKIgAjePKLuhMZDYaalOZFqY0I3YtaUUBfmq2I9COy83zTL3wyAdxdwchM8KTtNJQwL9uk6zOgyBqf9fo6l/imDHmTG+GYfM8SvrWHpODEzTFUKfCDighOFH+d3WN1nKdQpImLcSXhP4ZMzvQsW/YsFrlln7NP1VRq0O8hcAkupMRRS6Rsljuji+o+nXsYNKp2xHE0zRj9t6vl5ihOpldm00hAClt0BrowGthyLWGBp17Ej7alV0QRYXLJpnISEr/VfrfNf/F2Kh3GpfSnbKxe2/HQ9yG4cFBF41UB3cXnPXlU5kCQQ8DLTb9WVKahvfP8knsbxFCYqnJy9S/I=
 before_install:
 - go get github.com/axw/gocov/gocov
 - go get github.com/mattn/goveralls
@@ -11,8 +8,8 @@ before_install:
 - if ! go get github.com/golang/tools/cmd/cover; then go get golang.org/x/tools/cmd/cover;
   fi
 script:
-- cd $TRAVIS_BUILD_DIR && $HOME/gopath/bin/goveralls -service=travis-ci -repotoken $COVERALLS_TOKEN
 - cd $TRAVIS_BUILD_DIR && dep ensure
+- cd $TRAVIS_BUILD_DIR && $HOME/gopath/bin/goveralls -service=travis-ci -repotoken $COVERALLS_TOKEN
 - cd $TRAVIS_BUILD_DIR && go test
 - cd $TRAVIS_BUILD_DIR && GOOS=linux GOARCH=amd64 go build -o deb-simple_linux
 - cd $TRAVIS_BUILD_DIR && GOOS=darwin GOARCH=amd64 go build -o deb-simple_darwin
