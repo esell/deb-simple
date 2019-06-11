@@ -95,6 +95,13 @@ which allows you to place a plaintext file with the api key somewhere on your bu
 
 If you use deb-simple somewhere I'd love to hear about it! Make a PR to add your company/group/cult :)
 
+# Contributors
+
+- [icholy](https://github.com/icholy) 
+- [dig412](https://github.com/dig412) 
+- [tystuyfzand](https://github.com/tystuyfzand) 
+- [kshvakov](https://github.com/kshvakov) 
+- [pkramme](https://github.com/pkramme) 
 
 
 # License:
