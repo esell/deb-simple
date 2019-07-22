@@ -21,17 +21,18 @@ import (
 )
 
 type conf struct {
-	ListenPort    string   `json:"listenPort"`
-	RootRepoPath  string   `json:"rootRepoPath"`
-	SupportArch   []string `json:"supportedArch"`
-	Sections      []string `json:"sections"`
-	DistroNames   []string `json:"distroNames"`
-	EnableSSL     bool     `json:"enableSSL"`
-	SSLCert       string   `json:"SSLcert"`
-	SSLKey        string   `json:"SSLkey"`
-	EnableAPIKeys bool     `json:"enableAPIKeys"`
-	EnableSigning bool     `json:"enableSigning"`
-	PrivateKey    string   `json:"privateKey"`
+	ListenPort              string   `json:"listenPort"`
+	RootRepoPath            string   `json:"rootRepoPath"`
+	SupportArch             []string `json:"supportedArch"`
+	Sections                []string `json:"sections"`
+	DistroNames             []string `json:"distroNames"`
+	EnableSSL               bool     `json:"enableSSL"`
+	SSLCert                 string   `json:"SSLcert"`
+	SSLKey                  string   `json:"SSLkey"`
+	EnableAPIKeys           bool     `json:"enableAPIKeys"`
+	EnableSigning           bool     `json:"enableSigning"`
+	PrivateKey              string   `json:"privateKey"`
+	EnableDirectoryWatching bool     `json:"enableDirectoryWatching"`
 }
 
 func (c conf) ArchPath(distro, section, arch string) string {
@@ -108,44 +109,39 @@ func main() {
 		os.Exit(0)
 	}
 
-	// fire up filesystem watcher
-	mywatcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal("error creating fswatcher: ", err)
+	if parsedconfig.EnableDirectoryWatching {
+
+		// fire up filesystem watcher
+		mywatcher, err = fsnotify.NewWatcher()
+		if err != nil {
+			log.Fatal("error creating fswatcher: ", err)
+		}
+
+		go func() {
+			for {
+				select {
+				case event := <-mywatcher.Events:
+					if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
+						mutex.Lock()
+						if filepath.Ext(event.Name) == ".deb" {
+							if *verbose {
+								log.Println("Event: ", event)
+							}
+							rebuildRepoMetadata(event.Name)
+						}
+						mutex.Unlock()
+					}
+				case err := <-mywatcher.Errors:
+					log.Println("error:", err)
+				}
+			}
+		}()
 	}
 
 	if err := createDirs(parsedconfig); err != nil {
 		log.Println(err)
 		log.Fatalf("error creating directory structure, exiting")
 	}
-
-	go func() {
-		for {
-			select {
-			case event := <-mywatcher.Events:
-				if (event.Op&fsnotify.Write == fsnotify.Write) || (event.Op&fsnotify.Remove == fsnotify.Remove) {
-					mutex.Lock()
-					if filepath.Ext(event.Name) == ".deb" {
-						if *verbose {
-							log.Println("Event: ", event)
-						}
-						distroArch := destructPath(event.Name)
-						if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
-							log.Printf("error creating package: %s", err)
-						}
-						if parsedconfig.EnableSigning {
-							if err := createRelease(parsedconfig, distroArch[0]); err != nil {
-								log.Printf("Error creating Release file: %s", err)
-							}
-						}
-					}
-					mutex.Unlock()
-				}
-			case err := <-mywatcher.Errors:
-				log.Println("error:", err)
-			}
-		}
-	}()
 
 	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir(parsedconfig.RootRepoPath))))
 	http.Handle("/upload", uploadHandler(parsedconfig, db))
@@ -161,6 +157,18 @@ func main() {
 	} else {
 		log.Println("running without SSL enabled")
 		log.Fatal(http.ListenAndServe(":"+parsedconfig.ListenPort, nil))
+	}
+}
+
+func rebuildRepoMetadata(filePath string) {
+	distroArch := destructPath(filePath)
+	if err := createPackagesGz(parsedconfig, distroArch[0], distroArch[1], distroArch[2]); err != nil {
+		log.Printf("error creating Packages file: %s", err)
+	}
+	if parsedconfig.EnableSigning {
+		if err := createRelease(parsedconfig, distroArch[0]); err != nil {
+			log.Printf("Error creating Release file: %s", err)
+		}
 	}
 }
 
@@ -187,10 +195,12 @@ func createDirs(config conf) error {
 						return fmt.Errorf("error inspecting %s (%s): %s", distro, arch, err)
 					}
 				}
-				log.Println("starting watcher for ", config.ArchPath(distro, section, arch))
-				err := mywatcher.Add(config.ArchPath(distro, section, arch))
-				if err != nil {
-					return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
+				if parsedconfig.EnableDirectoryWatching {
+					log.Println("starting watcher for ", config.ArchPath(distro, section, arch))
+					err := mywatcher.Add(config.ArchPath(distro, section, arch))
+					if err != nil {
+						return fmt.Errorf("error creating watcher for %s (%s): %s", distro, arch, err)
+					}
 				}
 			}
 		}
@@ -219,7 +229,7 @@ func createAPIkey(db *bolt.DB) (string, error) {
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("APIkeys"))
 		if b == nil {
-			return errors.New("Database bucket \"APIkeys\" does not exist")
+			return errors.New("database bucket \"APIkeys\" does not exist")
 		}
 
 		err = b.Put([]byte(apiKey), []byte(apiKey))

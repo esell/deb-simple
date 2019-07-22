@@ -90,6 +90,12 @@ If you want to continuous deliver created packages to deb-simple server, it is n
 somewhere others could find it. You can use [deb-simple-cd-helper](https://github.com/paulkramme/deb-simple-cd-help),
 which allows you to place a plaintext file with the api key somewhere on your build server without the need to expose it.
 
+# Directory Watching
+By default `deb-simple` will watch the directories it creates for any new files and rebuild the repository accordingly. This means that you don't have to use the HTTP interface to upload new packages if you have a different build system - any method of getting them onto the server will work.
+
+This function means that there is a delay between a package being uploaded / created and it being availble for installation, as the repository rebuild happens asynchronously. This can result in errors like `Hash Sum Mismatch` from `apt install` processes if you happen to update in the middle of a rebuild.
+
+You can disable the watching behaviour by setting `enableDirectoryWatching=false` in the `conf.json` file. In this case the repository will be rebuilt as part of the HTTP file upload process, so once your CI build / `curl` upload has completed the package will be ready for installation. 
 
 # Do you use this?
 
