@@ -1,5 +1,5 @@
 BINARY := deb-simple
-VERSION ?=master
+VERSION := $(shell git describe --abbrev=0 --tags)
 
 all: test build
 
@@ -23,11 +23,10 @@ build-linux:
 build-osx:
 	GOOS=darwin go build -o release/$(BINARY)-$(VERSION)-osx
 build-deb:
-	which -s dpkg-deb || { echo "dpkg-deb does not exist, exiting..."; exit 1; }
-	mkdir release/$(BINARY)-$(VERSION)
-	mkdir -p release/$(BINARY)-$(VERSION)/usr/local/bin
-	mkdir -p release/$(BINARY)-$(VERSION)/etc/deb-simple
-	cp -r DEBIAN release/$(BINARY)-$(VERSION)/
-	cp sample_conf.json release/$(BINARY)-$(VERSION)/etc/deb-simple/conf.json
-	GOOS=linux go build -o release/$(BINARY)-$(VERSION)/usr/local/bin/${BINARY}
-	dpkg-deb --build release/$(BINARY)-$(VERSION)
+	dpkg-deb --version >/dev/null || { echo "dpkg-deb does not exist, exiting..."; exit 1; }
+	sed -i "s/<VERSION>/$(VERSION)/" debroot/DEBIAN/control
+	mkdir -p debroot/usr/bin
+	mkdir -p debroot/srv/deb-simple/repo
+	dep ensure
+	GOOS=linux go build -o debroot/usr/bin/$(BINARY)
+	dpkg-deb --build debroot $(BINARY)_$(VERSION).deb

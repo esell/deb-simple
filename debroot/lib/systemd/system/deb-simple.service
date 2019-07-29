@@ -1,0 +1,13 @@
+[Unit]
+Description=deb-simple
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/deb-simple -c /etc/deb-simple/config.json
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
+
