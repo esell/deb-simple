@@ -1,5 +1,5 @@
 Package: deb-simple
-Version: v1.4.1
+Version: <VERSION>
 Source: deb-simple
 Section: misc
 Priority: optional
