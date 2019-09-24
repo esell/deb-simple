@@ -9,5 +9,6 @@
     "SSLkey" : "server.key",
     "enableAPIKeys" : false,
     "enableSigning" : true,
-    "privateKey" : "./private.key"
+    "privateKey" : "./private.key",
+    "enableDirectoryWatching": true
 }
