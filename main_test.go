@@ -2,12 +2,10 @@ package main
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"testing"
 
 	"github.com/boltdb/bolt"
-	"github.com/fsnotify/fsnotify"
 )
 
 func TestCreateDirs(t *testing.T) {
@@ -19,10 +17,6 @@ func TestCreateDirs(t *testing.T) {
 	// sanity check...
 	if config.RootRepoPath != pwd+"/testing" {
 		t.Errorf("RootRepoPath is %s, should be %s\n ", config.RootRepoPath, pwd+"/testing")
-	}
-	mywatcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal("error creating fswatcher: ", err)
 	}
 	t.Log("creating temp dirs in ", config.RootRepoPath)
 	if err := createDirs(config); err != nil {

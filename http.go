@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/boltdb/bolt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/boltdb/bolt"
 )
 
 type deleteObj struct {
@@ -63,7 +62,9 @@ func uploadHandler(config conf, db *bolt.DB) http.Handler {
 			if part.FileName() == "" {
 				continue
 			}
-			dst, err := os.Create(filepath.Join(config.ArchPath(distroName, section, archType), part.FileName()))
+
+			path := filepath.Join(config.ArchPath(distroName, section, archType), part.FileName())
+			dst, err := os.Create(path)
 
 			if *verbose {
 				log.Printf("Deb package %s has been uploaded to %s %s %s", part.FileName(), distroName, section, archType)
@@ -73,11 +74,19 @@ func uploadHandler(config conf, db *bolt.DB) http.Handler {
 				httpErrorf(w, "error creating deb file: %s", err)
 				return
 			}
-			defer dst.Close()
 			if _, err := io.Copy(dst, part); err != nil {
 				httpErrorf(w, "error writing deb file: %s", err)
 				return
 			}
+
+			dst.Close()
+			if !parsedconfig.EnableDirectoryWatching {
+				rebuildRepoMetadata(path)
+				if *verbose {
+					log.Printf("Repository %s %s %s has been rebuilt", distroName, section, archType)
+				}
+			}
+
 		}
 		w.WriteHeader(http.StatusOK)
 	})
