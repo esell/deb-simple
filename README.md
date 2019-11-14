@@ -1,6 +1,10 @@
 [![Build Status](https://travis-ci.org/esell/deb-simple.svg?branch=master)](https://travis-ci.org/esell/deb-simple)
 [![Coverage Status](https://coveralls.io/repos/github/esell/deb-simple/badge.svg?branch=master)](https://coveralls.io/github/esell/deb-simple?branch=master)
 
+# MAINTAINER WANTED
+
+**As I am no longer using deb-simple in my day-to-day life, it has been mostly ignored as you can likely see from the issues/PRs. If you are interested in taking over and becoming the maintainer of deb-simple, please open an issue and we can start talking about transitioning it.**
+
 
 # deb-simple (get it? dead simple.. deb simple...)
 
