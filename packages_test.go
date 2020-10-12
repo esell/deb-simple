@@ -123,7 +123,7 @@ func TestInspectPackageControl(t *testing.T) {
 	var controlBuf bytes.Buffer
 	cfReader := bytes.NewReader(sampleDeb)
 	io.Copy(&controlBuf, cfReader)
-	parsedControl, err := inspectPackageControl(controlBuf)
+	parsedControl, err := inspectPackageControl(GZIP, controlBuf)
 	if err != nil {
 		t.Errorf("error inspecting control file: %s", err)
 	}
@@ -132,7 +132,7 @@ func TestInspectPackageControl(t *testing.T) {
 	}
 
 	var failControlBuf bytes.Buffer
-	_, err = inspectPackageControl(failControlBuf)
+	_, err = inspectPackageControl(GZIP, failControlBuf)
 	if err == nil {
 		t.Error("inspectPackageControl() should have failed, it did not")
 	}

@@ -15,8 +15,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"errors"
 
 	"github.com/blakesmith/ar"
+	lzma "github.com/xi2/xz"
+)
+
+type Compression int
+
+const (
+	LZMA Compression = iota
+	GZIP
 )
 
 func inspectPackage(filename string) (string, error) {
@@ -44,25 +53,56 @@ func inspectPackage(filename string) (string, error) {
 			return "", fmt.Errorf("error in inspectPackage loop: %s", err)
 		}
 
-		if strings.TrimRight(header.Name, "/") == "control.tar.gz" {
+		if strings.Contains(header.Name, "control.tar") {
+			var compression Compression
+			if strings.TrimRight(header.Name, "/") == "control.tar.gz" {
+				compression = GZIP
+			} else if strings.TrimRight(header.Name, "/") == "control.tar.xz" {
+				compression = LZMA
+			} else {
+				log.Println("\t No control file found")
+				err := errors.New("No control file found")
+				return "", err
+			}
+
 			io.Copy(&controlBuf, arReader)
 			if *verbose {
 				log.Println("\t Found a package control file")
 			}
-			return inspectPackageControl(controlBuf)
+			return inspectPackageControl(compression, controlBuf)
 		}
 
 	}
 	return "", nil
 }
 
-func inspectPackageControl(filename bytes.Buffer) (string, error) {
-	gzf, err := gzip.NewReader(bytes.NewReader(filename.Bytes()))
-	if err != nil {
-		return "", fmt.Errorf("error creating gzip reader: %s", err)
+func inspectPackageControl(compression Compression, filename bytes.Buffer) (string, error) {
+	var tarReader *tar.Reader
+	var err error
+
+	switch compression {
+	case GZIP:
+		var compFile *gzip.Reader
+		compFile, err = gzip.NewReader(bytes.NewReader(filename.Bytes()))
+		tarReader = tar.NewReader(compFile)
+		if *verbose {
+			log.Println("\t GZIP Control file found")
+		}
+		break
+	case LZMA:
+		var compFile *lzma.Reader
+		compFile, err = lzma.NewReader(bytes.NewReader(filename.Bytes()), lzma.DefaultDictMax)
+		tarReader = tar.NewReader(compFile)
+		if *verbose {
+			log.Println("\t LZMA Control file found")
+		}
+		break
 	}
 
-	tarReader := tar.NewReader(gzf)
+	if err != nil {
+		return "", fmt.Errorf("error creating gzip/lzma reader: %s", err)
+	}
+
 	var controlBuf bytes.Buffer
 	for {
 		header, err := tarReader.Next()
