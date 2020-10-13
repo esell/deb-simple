@@ -35,9 +35,6 @@ to be used in a CI pipeline it had to support remote uploads and be able to upda
 
 # General Usage:
 
-**This project is now using the native Go vendoring feature so you will need to build with Go >1.7 or if using 1.5/1.6 you will need to make sure `GO15VENDOREXPERIMENT` is set to `1`.**		
-
-
 If you do not want to build from source you can just download a pre-built binary from the Releases section.
 
 Fill out the conf.json file with the values you want, it should be pretty self-explanatory, then fire it up!
