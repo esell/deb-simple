@@ -115,7 +115,7 @@ func TestInspectPackage(t *testing.T) {
 	}
 }
 
-func TestInspectPackageControl(t *testing.T) {
+func TestInspectPackageControlGz(t *testing.T) {
 	sampleDeb, err := ioutil.ReadFile("samples/control.tar.gz")
 	if err != nil {
 		t.Errorf("error opening sample deb file: %s", err)
@@ -123,20 +123,42 @@ func TestInspectPackageControl(t *testing.T) {
 	var controlBuf bytes.Buffer
 	cfReader := bytes.NewReader(sampleDeb)
 	io.Copy(&controlBuf, cfReader)
-	parsedControl, err := inspectPackageControl(controlBuf)
+	parsedControl, err := inspectPackageControl(GZIP, controlBuf)
 	if err != nil {
-		t.Errorf("error inspecting control file: %s", err)
+		t.Errorf("error inspecting GZIP control file: %s", err)
 	}
 	if parsedControl != goodOutput {
 		t.Errorf("control file does not match")
 	}
 
 	var failControlBuf bytes.Buffer
-	_, err = inspectPackageControl(failControlBuf)
+	_, err = inspectPackageControl(GZIP, failControlBuf)
 	if err == nil {
 		t.Error("inspectPackageControl() should have failed, it did not")
 	}
+}
 
+func TestInspectPackageControlLzma(t *testing.T) {
+	sampleDeb, err := ioutil.ReadFile("samples/control.tar.xz")
+	if err != nil {
+		t.Errorf("error opening sample deb file: %s", err)
+	}
+	var controlBuf bytes.Buffer
+	cfReader := bytes.NewReader(sampleDeb)
+	io.Copy(&controlBuf, cfReader)
+	parsedControl, err := inspectPackageControl(GZIP, controlBuf)
+	if err != nil {
+		t.Errorf("error inspecting LZMA control file: %s", err)
+	}
+	if parsedControl != goodOutput {
+		t.Errorf("control file does not match")
+	}
+
+	var failControlBuf bytes.Buffer
+	_, err = inspectPackageControl(GZIP, failControlBuf)
+	if err == nil {
+		t.Error("inspectPackageControl() should have failed, it did not")
+	}
 }
 
 func TestCreatePackagesGz(t *testing.T) {
