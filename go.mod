@@ -1,4 +1,4 @@
-module github.com/ASE/deb-simple-1
+module github.com/esell/deb-simple
 
 go 1.15
 
