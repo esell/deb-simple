@@ -7,7 +7,7 @@ WORKDIR $GOPATH/src/github.com/esell/deb-simple
 COPY deb-simple /
 
 # This container exposes port 8080 to the outside world
-EXPOSE 9090
+EXPOSE 8080
 
 # Run the executable
 CMD ["/deb-simple -v"]
