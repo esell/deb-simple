@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var goodOutput = `Package: vim-tiny
+var goodOutputGz = `Package: vim-tiny
 Source: vim
 Version: 2:7.4.052-1ubuntu3
 Architecture: amd64
@@ -35,6 +35,37 @@ Description: Vi IMproved - enhanced vi editor - compact version
  (online documentation, plugins, ...).
 Original-Maintainer: Debian Vim Maintainers <pkg-vim-maintainers@lists.alioth.debian.org>
 `
+
+var goodOutputLzma = `Package: ifupdown2
+Version: 3.0.0-1
+Architecture: all
+Maintainer: Julien Fortin <julien@cumulusnetworks.com>
+Installed-Size: 1576
+Depends: python3:any, iproute2
+Suggests: isc-dhcp-client, bridge-utils, ethtool, python3-gvgen, python3-mako
+Conflicts: ifupdown
+Replaces: ifupdown
+Provides: ifupdown
+Section: admin
+Priority: optional
+Homepage: https://github.com/cumulusnetworks/ifupdown2
+Description: Network Interface Management tool similar to ifupdown
+ ifupdown2 is ifupdown re-written in Python. It replaces ifupdown and provides
+ the same user interface as ifupdown for network interface configuration.
+ Like ifupdown, ifupdown2 is a high level tool to configure (or, respectively
+ deconfigure) network interfaces based on interface definitions in
+ /etc/network/interfaces. It is capable of detecting network interface
+ dependencies and comes with several new features which are available as
+ new command options to ifup/ifdown/ifquery commands. It also comes with a new
+ command ifreload to reload interface configuration with minimum
+ disruption. Most commands are also capable of input and output in JSON format.
+ It is backward compatible with ifupdown /etc/network/interfaces format and
+ supports newer simplified format. It also supports interface templates with
+ python-mako for large scale interface deployments. See
+ /usr/share/doc/ifupdown2/README.rst for details about ifupdown2. Examples
+ are available under /usr/share/doc/ifupdown2/examples.
+`
+
 
 var goodPkgGzOutput = `Package: vim-tiny
 Source: vim
@@ -101,12 +132,9 @@ SHA256: 9938ec82a8c882ebc2d59b64b0bf2ac01e9cbc5a235be4aa268d4f8484e75eab
 `
 
 func TestInspectPackage(t *testing.T) {
-	parsedControl, err := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
+	_, err := inspectPackage("samples/vim-tiny_7.4.052-1ubuntu3_amd64.deb")
 	if err != nil {
 		t.Errorf("inspectPackage() error: %s", err)
-	}
-	if parsedControl != goodOutput {
-		t.Errorf("control file does not match")
 	}
 
 	_, err = inspectPackage("thisfileshouldnotexist")
@@ -115,7 +143,7 @@ func TestInspectPackage(t *testing.T) {
 	}
 }
 
-func TestInspectPackageControl(t *testing.T) {
+func TestInspectPackageControlGz(t *testing.T) {
 	sampleDeb, err := ioutil.ReadFile("samples/control.tar.gz")
 	if err != nil {
 		t.Errorf("error opening sample deb file: %s", err)
@@ -123,20 +151,42 @@ func TestInspectPackageControl(t *testing.T) {
 	var controlBuf bytes.Buffer
 	cfReader := bytes.NewReader(sampleDeb)
 	io.Copy(&controlBuf, cfReader)
-	parsedControl, err := inspectPackageControl(controlBuf)
+	parsedControl, err := inspectPackageControl(GZIP, controlBuf)
 	if err != nil {
-		t.Errorf("error inspecting control file: %s", err)
+		t.Errorf("error inspecting GZIP control file: %s", err)
 	}
-	if parsedControl != goodOutput {
+	if parsedControl != goodOutputGz {
 		t.Errorf("control file does not match")
 	}
 
 	var failControlBuf bytes.Buffer
-	_, err = inspectPackageControl(failControlBuf)
+	_, err = inspectPackageControl(GZIP, failControlBuf)
 	if err == nil {
 		t.Error("inspectPackageControl() should have failed, it did not")
 	}
+}
 
+func TestInspectPackageControlLzma(t *testing.T) {
+	sampleDeb, err := ioutil.ReadFile("samples/control.tar.xz")
+	if err != nil {
+		t.Errorf("error opening sample deb file: %s", err)
+	}
+	var controlBuf bytes.Buffer
+	cfReader := bytes.NewReader(sampleDeb)
+	io.Copy(&controlBuf, cfReader)
+	parsedControl, err := inspectPackageControl(LZMA, controlBuf)
+	if err != nil {
+		t.Errorf("error inspecting LZMA control file: %s", err)
+	}
+	if parsedControl != goodOutputLzma {
+		t.Errorf("control file does not match")
+	}
+
+	var failControlBuf bytes.Buffer
+	_, err = inspectPackageControl(LZMA, failControlBuf)
+	if err == nil {
+		t.Error("inspectPackageControl() should have failed, it did not")
+	}
 }
 
 func TestCreatePackagesGz(t *testing.T) {
