@@ -10,7 +10,6 @@ clean:
 	go clean
 	rm -rf release
 build:
-	dep ensure
 	go build -o $(BINARY)
 
 .PHONY: release
