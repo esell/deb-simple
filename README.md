@@ -1,3 +1,4 @@
+![Build](https://github.com/esell/deb-simple/workflows/Build/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/esell/deb-simple/badge.svg?branch=master)](https://coveralls.io/github/esell/deb-simple?branch=master)
 
 # MAINTAINER WANTED
