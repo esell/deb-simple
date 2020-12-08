@@ -53,8 +53,8 @@ jobs:
         GO111MODULE: off
       run: go get github.com/mattn/goveralls
 
-    - name: Send coverage
-      env:
-        COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
-      run: goveralls -coverprofile=covprofile -service=github
+    - name: Send Coverage
+      uses: shogo82148/actions-goveralls@v1.4.2
+      with:
+        path-to-profile: covprofile
 
