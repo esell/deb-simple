@@ -1,6 +1,6 @@
 module github.com/esell/deb-simple
 
-go 1.15
+go 1.18
 
 require (
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
